@@ -1,123 +1,41 @@
 import pyglet
 import math
- 
-class Vector():
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-   
-    def rotate(self, angle):
-        new_x = self.x * math.cos(angle) + self.y * -math.sin(angle)
-        new_y = self.x * math.sin(angle) + self.y * math.cos(angle)
-        self.x, self.y = new_x, new_y
-       
-    def angle_between(self, vector2):
-        dot_product = self.x * vector2.x + self.y * vector2.y
-        return math.acos(dot_product / (self.modulus() * vector2.modulus()))
-   
-    def modulus(self):
-        return math.sqrt(self.x**2 + self.y**2)
- 
-class Crank():
-    def __init__(self, radius, mass, batch):
-        # crank = pyglet.image.load('testsprite.png')   add later if I use actual sprite
-        # crank.anchor_x = round(crank.width / 2)
-        # crank.anchor_y = round(crank.height / 2)
- 
-        self.crankarm = pyglet.shapes.Line(x=400, y=400, x2=400, y2=520, width=40, color=[255, 255, 255], batch=batch)
-        self.bearing = pyglet.shapes.Circle(x=400, y=400, radius=20, color=[255, 255, 255], batch=batch)
- 
-        self.RADIUS = radius
-        self.MASS = mass
-        self.MOMENT_OF_INTERTIA = self.MASS * self.RADIUS**2
- 
-        self.angular_velocity = 2 # fix to start properly later, but have this here so the engine actually starts
-        self.angle_radians = 0
- 
-    def update_angle(self, delta_theta):
-        self.angle_radians += delta_theta
-        self.angle_radians %= (2 * math.pi)
+import crank, connectorRod, piston
+from vector import Vector
 
-        angle_degrees = math.degrees(self.angle_radians)
-        self.crankarm.rotation = angle_degrees
-        self.bearing.rotation = angle_degrees
- 
-    def get_delta_theta(self, dt):
-        return self.angular_velocity * dt
-   
-    def get_torque(self, force):
-        return force * self.RADIUS
- 
-    def update_angular_velocity(self, torque, dt):
-        angular_momentum_change = torque * dt
-        angular_velocity_change = angular_momentum_change / self.MOMENT_OF_INTERTIA
-        self.angular_velocity += angular_velocity_change
- 
-    def update(self, force, dt):
-        torque = self.get_torque(force)
-        #print(torque)
-        self.update_angular_velocity(torque, dt)
-        self.update_angle(self.get_delta_theta(dt))
- 
-class ConnectorRod():
-    def __init__(self, mass, batch):
-        self.rod = pyglet.shapes.Line(x=400, y=500, x2=400, y2=700, width=15, color=[201, 201, 201], batch=batch)
-        self.crank_bearing = pyglet.shapes.Circle(x=400, y=500, radius=15, color=[201, 201, 201], batch=batch)
-        self.piston_bearing = pyglet.shapes.Circle(x=400, y=700, radius=15, color=[201, 201, 201], batch=batch)
-       
-        self.MASS = mass
-        self.LENGTH = 200 #Remember to change this later!!
-        self.crank_anchor_vector = Vector(0, 100)
- 
-    def update_crank_anchor_position(self, delta_theta):
-        initial_x = self.crank_anchor_vector.x
-        initial_y = self.crank_anchor_vector.y
-
-        self.crank_anchor_vector.rotate(-delta_theta) # use negative theta as the matrix rotation is clockwise
-        delta_x = self.crank_anchor_vector.x - initial_x
-        delta_y = self.crank_anchor_vector.y - initial_y
-
-        self.rod.x += delta_x
-        self.rod.y += delta_y
-        self.crank_bearing.x += delta_x
-        self.crank_bearing.y += delta_y
- 
-    def update_piston_anchor_position(self):
-        delta_x = self.rod.x2 - self.rod.x
-        self.rod.y2 = math.sqrt(self.LENGTH**2 - delta_x**2) + self.rod.y
-        self.piston_bearing.y = self.rod.y2
-   
-    def update(self, delta_theta):
-        self.update_crank_anchor_position(delta_theta)
-        self.update_piston_anchor_position()
-
-class Piston():
-    def __init__(self, radius, mass, batch):
-        self.RADIUS = radius * 100 #CHANGE THIS TO BE TO SCALE LATER!!
-        self.MASS = mass
-
-        self.piston = pyglet.shapes.Rectangle(x=400-self.RADIUS, y=700, width=self.RADIUS*2, height=150, color=[255, 255, 255], batch=batch)
-
-    def update(self, y_coordinate):
-        self.piston.y = y_coordinate
 
 class GasSimulation():
     def __init__(self):
-        pass
-
-    def calculate_force_during_downstroke(self, dt):
-        return 15
+        self.t_max = 2273
+        self.t_min = 623
+        
+    def get_temperature(self, theta):
+        return self.t_max - (self.t_max - self.t_min) * abs(math.cos(theta))
     
-    def calculate_force_during_upstroke(self, dt):
-        return 5
+    def calculate_force_during_downstroke(self, theta, dt):
+        temperature = self.get_temperature(theta)
+        cylinder_height = 0.05
+        pressure = 0.748*8.31*temperature
+        force = pressure/cylinder_height
+        print(force)
+        return force
+
+    
+    def calculate_force_during_upstroke(self, theta, dt):
+        temperature = self.get_temperature(theta)
+        cylinder_height = 0.05
+        pressure = 0.594*8.31*temperature
+        force = pressure/cylinder_height
+        print(force)
+        return force
         
 class Simulation():
     def __init__(self, radius, crank_mass, rod_mass, piston_mass, piston_radius):
         self.batch = pyglet.graphics.Batch()
  
-        self.crank = Crank(radius, crank_mass, self.batch)
-        self.rod = ConnectorRod(rod_mass, self.batch)
-        self.piston = Piston(piston_mass,  piston_radius, self.batch)
+        self.crank = crank.Crank(radius, crank_mass, self.batch)
+        self.piston = piston.Piston(piston_mass,  piston_radius, self.batch)
+        self.rod = connectorRod.ConnectorRod(rod_mass, self.batch)
 
         self.component_weight = (rod_mass + piston_mass) * 9.81
         self.gas_simulation = GasSimulation()
@@ -127,9 +45,9 @@ class Simulation():
  
     def update_all(self, dt):
         if self.crank.angle_radians > math.pi:
-            force = self.gas_simulation.calculate_force_during_upstroke(dt)
+            force = self.gas_simulation.calculate_force_during_upstroke(self.crank.angle_radians, dt) / 130
         else:
-            force = self.gas_simulation.calculate_force_during_downstroke(dt)
+            force = self.gas_simulation.calculate_force_during_downstroke(self.crank.angle_radians, dt) / 130
 
         rod_direction_vector = self.find_rod_direction_vector()
         force_parallel_to_rod = self.transfer_force_to_rod(force, rod_direction_vector)
@@ -179,5 +97,5 @@ class SimulationWindow(pyglet.window.Window):
 
 if __name__ == "__main__":
     simulation = SimulationWindow(width=1280, height=720, caption="Simulation", resizable = True)
-    pyglet.clock.schedule_interval(simulation.update, 1/120)
+    pyglet.clock.schedule_interval(simulation.update, 1/60)
     pyglet.app.run()
