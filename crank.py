@@ -14,7 +14,7 @@ class Crank():
         self.MASS = mass
         self.MOMENT_OF_INTERTIA = self.MASS * self.RADIUS**2
  
-        self.angular_velocity = 2 # fix to start properly later, but have this here so the engine actually starts
+        self.angular_velocity = 20 # fix to start properly later, but have this here so the engine actually starts
         self.angle_radians = 0
  
     def update_angle(self, delta_theta):
@@ -35,6 +35,12 @@ class Crank():
         angular_momentum_change = torque * dt
         angular_velocity_change = angular_momentum_change / self.MOMENT_OF_INTERTIA
         self.angular_velocity += angular_velocity_change
+
+        if self.angular_velocity > 630:
+            self.angular_velocity = 630
+
+        #rpm = self.angular_velocity * 60 / (2 * math.pi)
+        #print(rpm)
  
     def update(self, force, dt):
         torque = self.get_torque(force)

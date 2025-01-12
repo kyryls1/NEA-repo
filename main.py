@@ -1,6 +1,7 @@
 import pyglet
 import math
 import crank, connectorRod, piston
+import time
 from vector import Vector
 
 
@@ -8,16 +9,22 @@ class GasSimulation():
     def __init__(self):
         self.t_max = 2273
         self.t_min = 623
+        self.t_difference = self.t_max - self.t_min
         
     def get_temperature(self, theta):
-        return self.t_max - (self.t_max - self.t_min) * abs(math.cos(theta))
+        if 0 <= theta <= math.pi:
+            #print(self.t_max - (self.t_max - self.t_min) * (theta / math.pi))
+            return self.t_max - (self.t_max - self.t_min) * (theta / math.pi)
+        else:
+            #print(self.t_min + (self.t_max - self.t_min) * ((theta - math.pi) / math.pi))
+            return self.t_min + (self.t_max - self.t_min) * ((theta - math.pi) / math.pi)
     
     def calculate_force_during_downstroke(self, theta, dt):
         temperature = self.get_temperature(theta)
         cylinder_height = 0.05
         pressure = 0.748*8.31*temperature
         force = pressure/cylinder_height
-        print(force)
+        #print(force)
         return force
 
     
@@ -26,7 +33,7 @@ class GasSimulation():
         cylinder_height = 0.05
         pressure = 0.594*8.31*temperature
         force = pressure/cylinder_height
-        print(force)
+        #print(force)
         return force
         
 class Simulation():
@@ -39,6 +46,7 @@ class Simulation():
 
         self.component_weight = (rod_mass + piston_mass) * 9.81
         self.gas_simulation = GasSimulation()
+        
 
     def draw(self):
         self.batch.draw()
@@ -87,15 +95,29 @@ class SimulationWindow(pyglet.window.Window):
         super().__init__(*args, **kwargs)
         self.set_minimum_size(width=400, height=300)
         self.simulation = Simulation(1, 1, 1, 1, 1)
+        self.fps_display = pyglet.window.FPSDisplay(self)
+
+        self.simulation_update_count = 0
+        self.last_update_time = time.time()
  
     def on_draw(self):
         self.clear()
         self.simulation.draw()
+        self.fps_display.draw()
  
-    def update(self, dt):
+    def update_simulation(self, dt):
         self.simulation.update_all(dt)
+        self.simulation_update_count += 1
+        current_time = time.time()
+
+        if current_time - self.last_update_time >= 1:
+            print(f"Simulation updates per second: {self.simulation_update_count}")
+            self.simulation_update_count = 0  # Reset counter after printing
+            self.last_update_time = current_time
+
 
 if __name__ == "__main__":
-    simulation = SimulationWindow(width=1280, height=720, caption="Simulation", resizable = True)
-    pyglet.clock.schedule_interval(simulation.update, 1/60)
-    pyglet.app.run()
+    simulation = SimulationWindow(width=1280, height=720, caption="Simulation", resizable = True, vsync=False)
+    pyglet.clock.schedule_interval(simulation.update_simulation, 1/2000)
+    #pyglet.options['com_mta'] = True
+    pyglet.app.run(interval=1/30)
