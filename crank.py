@@ -14,7 +14,7 @@ class Crank():
         self.MASS = mass
         self.MOMENT_OF_INTERTIA = self.MASS * self.RADIUS**2
  
-        self.angular_velocity = 20 # fix to start properly later, but have this here so the engine actually starts
+        self.angular_velocity = 1 # fix to start properly later, but have this here so the engine actually starts
         self.angle_radians = 0
  
     def update_angle(self, delta_theta):

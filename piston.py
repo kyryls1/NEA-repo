@@ -1,7 +1,7 @@
 import pyglet
 
 class Piston():
-    def __init__(self, radius, mass, batch):
+    def __init__(self, mass, radius, batch):
         self.RADIUS = radius * 100 #CHANGE THIS TO BE TO SCALE LATER!!
         self.MASS = mass
 
