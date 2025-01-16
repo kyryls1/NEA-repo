@@ -159,7 +159,7 @@ class SimulationWindow(pyglet.window.Window):
         current_time = time.time()
 
         if current_time - self.last_update_time >= 1:
-            #print(f"Simulation updates per second: {self.simulation_update_count}")
+            print(f"Simulation updates per second: {self.simulation_update_count}")
             self.simulation_update_count = 0  # Reset counter after printing
             self.last_update_time = current_time
     '''
@@ -222,7 +222,7 @@ class SimulationWindow(pyglet.window.Window):
             #pyglet.app.exit()
 
         elif symbol == pyglet.window.key.ENTER:
-            my_text = int(self.widgets[0].document.text)
+            my_text = float(self.widgets[0].document.text)
             self.simulation = Simulation(1, 1, 1, 1, my_text)
             self.widgets[0].document.text = ""
 
