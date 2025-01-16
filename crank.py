@@ -29,21 +29,21 @@ class Crank():
         return self.angular_velocity * dt
    
     def get_torque(self, force):
-        return force * self.RADIUS
+        return force * self.RADIUS / 100
  
     def update_angular_velocity(self, torque, dt):
         angular_momentum_change = torque * dt
         angular_velocity_change = angular_momentum_change / self.MOMENT_OF_INTERTIA
         self.angular_velocity += angular_velocity_change
 
-        if self.angular_velocity > 630:
-            self.angular_velocity = 630
+        if self.angular_velocity > 300:
+            self.angular_velocity = 300
 
         #rpm = self.angular_velocity * 60 / (2 * math.pi)
         #print(rpm)
  
     def update(self, force, dt):
         torque = self.get_torque(force)
-        #print(torque)
+        print(torque)
         self.update_angular_velocity(torque, dt)
         self.update_angle(self.get_delta_theta(dt))

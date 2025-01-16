@@ -9,6 +9,10 @@ class GasSimulation():
     def __init__(self):
         self.t_max = 2273
         self.t_min = 623
+        self.mol_max = 0.748
+        self.mol_min = 0.594
+        self.vol_max = 0.5
+        self.vol_min = 1
         self.t_difference = self.t_max - self.t_min
         
     def get_temperature(self, theta):
@@ -18,23 +22,34 @@ class GasSimulation():
         else:
             #print(self.t_min + (self.t_max - self.t_min) * ((theta - math.pi) / math.pi))
             return self.t_min + (self.t_max - self.t_min) * ((theta - math.pi) / math.pi)
-    
-    def calculate_force_during_downstroke(self, theta, dt):
-        temperature = self.get_temperature(theta)
-        cylinder_height = 0.05
-        pressure = 0.748*8.31*temperature
-        force = pressure/cylinder_height
-        #print(force)
-        return force
-
-    def calculate_force_during_upstroke(self, theta, dt):
-        temperature = self.get_temperature(theta)
-        cylinder_height = 0.05
-        pressure = 0.594*8.31*temperature
-        force = pressure/cylinder_height
-        #print(force)
-        return force
         
+    def get_gas_mol(self, theta):
+        #print(math.degrees(theta))
+        if 0 <= theta <= math.pi:
+            #print(self.mol_max - (self.mol_max - self.mol_min) * (theta / math.pi))
+            return self.mol_max - (self.mol_max - self.mol_min) * (theta / math.pi)
+        else:
+            #print(self.mol_max + (self.mol_max - self.mol_min) * ((theta - math.pi) / math.pi))
+            return self.mol_min + (self.mol_max - self.mol_min) * ((theta - math.pi) / math.pi)
+            
+    def get_height(self, theta):
+        # test func
+        if 0 <= theta <= math.pi:
+            return self.vol_max - (self.vol_max - self.vol_min) * (theta / math.pi)
+        else:
+            return self.vol_min + (self.vol_max - self.vol_min) * ((theta - math.pi) / math.pi)
+        
+    
+    def calculate_force(self, theta, dt):
+        temperature = self.get_temperature(theta)
+        mols = self.get_gas_mol(theta)
+        cylinder_height = self.get_height(theta)
+        pressure = mols*8.31*temperature
+        force = pressure/cylinder_height
+        #print(force)
+        return force
+    
+  
 class Simulation():
     def __init__(self, radius, crank_mass, rod_mass, piston_mass, piston_radius):
         self.batch = pyglet.graphics.Batch()
@@ -51,14 +66,7 @@ class Simulation():
         self.batch.draw()
  
     def update_all(self, dt):
-        '''
-        if self.crank.angle_radians > math.pi:
-            force = self.gas_simulation.calculate_force_during_upstroke(self.crank.angle_radians, dt) / 130
-        else:
-            force = self.gas_simulation.calculate_force_during_downstroke(self.crank.angle_radians, dt) / 130
-
-        '''
-        force = 2
+        force = self.gas_simulation.calculate_force(self.crank.angle_radians, dt)
         rod_direction_vector = self.find_rod_direction_vector()
         force_parallel_to_rod = self.transfer_force_to_rod(force, rod_direction_vector)
         force_tangent_to_crank = self.transfer_force_to_crank(force_parallel_to_rod, rod_direction_vector)
@@ -126,11 +134,11 @@ class SimulationWindow(pyglet.window.Window):
         self.batch2 = pyglet.graphics.Batch()
 
         self.labels = [
-            pyglet.text.Label('Name', x=10, y=100, anchor_y='bottom',
+            pyglet.text.Label('Width', x=10, y=100, anchor_y='bottom',
                               color=(255, 255, 255, 255), batch=self.batch2),
-            pyglet.text.Label('Species', x=10, y=60, anchor_y='bottom',
+            pyglet.text.Label('test', x=10, y=60, anchor_y='bottom',
                               color=(255, 255, 255, 255), batch=self.batch2),
-            pyglet.text.Label('Special abilities', x=10, y=20,
+            pyglet.text.Label('test2', x=10, y=20,
                               anchor_y='bottom', color=(255, 255, 255, 255),
                               batch=self.batch2),
         ]
@@ -240,6 +248,6 @@ class SimulationWindow(pyglet.window.Window):
 
 if __name__ == "__main__":
     simulation = SimulationWindow(width=1280, height=720, caption="Simulation", resizable = True, vsync=False)
-    pyglet.clock.schedule_interval(simulation.update_simulation, 1/3000)
+    pyglet.clock.schedule_interval(simulation.update_simulation, 1/1000)
     #pyglet.options['com_mta'] = True
     pyglet.app.run(interval=1/30)
