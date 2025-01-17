@@ -14,17 +14,20 @@ class GasSimulation():
         self.vol_max = 0.5
         self.vol_min = 1
         self.t_difference = self.t_max - self.t_min
-        
+
     def get_temperature(self, theta):
-        if 0 <= theta <= math.pi:
-            #print(self.t_max - (self.t_max - self.t_min) * (theta / math.pi))
-            return self.t_max - (self.t_max - self.t_min) * (theta / math.pi)
+        if 0 <= theta < 0.1:
+            return self.t_max
+
+        elif 0.1 <= theta <= math.pi:
+            k = 1.5 
+            return self.t_min + (self.t_max - self.t_min) * math.exp(-k * (theta - 0.1))
         else:
-            #print(self.t_min + (self.t_max - self.t_min) * ((theta - math.pi) / math.pi))
-            return self.t_min + (self.t_max - self.t_min) * ((theta - math.pi) / math.pi)
-        
+            fraction = (theta - math.pi) / math.pi
+            amplitude = 0.1 * (self.t_max - self.t_min)
+            return self.t_min + amplitude * (1 - math.cos(math.pi * fraction))
+
     def get_gas_mol(self, theta):
-        #print(math.degrees(theta))
         if 0 <= theta <= math.pi:
             #print(self.mol_max - (self.mol_max - self.mol_min) * (theta / math.pi))
             return self.mol_max - (self.mol_max - self.mol_min) * (theta / math.pi)
@@ -39,7 +42,6 @@ class GasSimulation():
         else:
             return self.vol_min + (self.vol_max - self.vol_min) * ((theta - math.pi) / math.pi)
         
-    
     def calculate_force(self, theta, dt):
         temperature = self.get_temperature(theta)
         mols = self.get_gas_mol(theta)
@@ -48,8 +50,99 @@ class GasSimulation():
         force = pressure/cylinder_height
         #print(force)
         return force
-    
-  
+    '''
+    def get_temperature(self, theta):
+        """
+        4-stroke approximation:
+         0→π   : Power stroke, rapidly high temperature then decays
+         π→2π  : Exhaust stroke, temp near t_min
+         2π→3π : Intake stroke, near ambient or slightly above
+         3π→4π : Compression stroke, temperature rising back to t_max
+        """
+        theta_mod = theta % (4 * math.pi)
+
+        # (1) Power stroke: 0 to π
+        if 0 <= theta_mod < math.pi:
+            # Start near t_max, decay to somewhere above t_min
+            # Example: exponential drop from t_max → t_min
+            k = 1.5
+            # Shift by small offset if desired, e.g. start at 0.1
+            return self.t_min + (self.t_max - self.t_min) * math.exp(-k * theta_mod)
+
+        # (2) Exhaust stroke: π to 2π
+        elif math.pi <= theta_mod < 2 * math.pi:
+            # Quickly drop temperature to near t_min
+            return self.t_min
+
+        # (3) Intake stroke: 2π to 3π
+        elif 2 * math.pi <= theta_mod < 3 * math.pi:
+            # Mixture entering, near ambient but slightly warmer than t_min
+            # Just an example offset from t_min
+            return self.t_min + 0.05 * (self.t_max - self.t_min)
+
+        # (4) Compression stroke: 3π to 4π
+        else:
+            # Raise temperature from near t_min back to t_max
+            fraction = (theta_mod - 3 * math.pi) / math.pi  # 0→1 in this interval
+            return self.t_min + fraction * (self.t_max - self.t_min)
+
+    def get_gas_mol(self, theta):
+        """
+        4-stroke approximation for moles of gas:
+         - More gas early in the cycle (power stroke),
+         - Less gas on exhaust,
+         - Then slight refill on intake,
+         - Pressure rise again in compression.
+        """
+        theta_mod = theta % (4 * math.pi)
+
+        if 0 <= theta_mod < math.pi:
+            # Power stroke: assume full charge of mixture
+            return self.mol_max
+
+        elif math.pi <= theta_mod < 2 * math.pi:
+            # Exhaust stroke: pushing gas out, fewer moles left
+            return self.mol_min
+
+        elif 2 * math.pi <= theta_mod < 3 * math.pi:
+            # Intake stroke: refilling, ramp from mol_min to mol_max
+            frac = (theta_mod - 2 * math.pi) / math.pi
+            return self.mol_min + frac * (self.mol_max - self.mol_min)
+
+        else:
+            # Compression stroke: assume near full mixture
+            return self.mol_max
+
+    def get_height(self, theta):
+        """
+        4-stroke approximation for piston height:
+          0→π   : Power stroke (piston travels downward)
+          π→2π  : Exhaust stroke (piston moves up)
+          2π→3π : Intake stroke (piston moves down again)
+          3π→4π : Compression stroke (piston moves up)
+        """
+        theta_mod = theta % (4 * math.pi)
+
+        # Simplistic: map each π rad to a linear up/down motion
+        segment = int(theta_mod // math.pi)  # which of the 4 strokes [0..3]
+        alpha = (theta_mod % math.pi) / math.pi  # 0→1 within each stroke
+
+        # For demonstration: one up-down cycle every π
+        #  - Even strokes: piston going from top to bottom
+        #  - Odd strokes: piston going from bottom to top
+        if segment == 0:
+            # 0→π  : moving from top (vol_min) to bottom (vol_max)
+            return self.vol_min + alpha * (self.vol_max - self.vol_min)
+        elif segment == 1:
+            # π→2π : bottom to top
+            return self.vol_max - alpha * (self.vol_max - self.vol_min)
+        elif segment == 2:
+            # 2π→3π: top to bottom
+            return self.vol_min + alpha * (self.vol_max - self.vol_min)
+        else:
+            # 3π→4π: bottom to top
+            return self.vol_max - alpha * (self.vol_max - self.vol_min)    
+    '''
 class Simulation():
     def __init__(self, radius, crank_mass, rod_mass, piston_mass, piston_radius):
         self.batch = pyglet.graphics.Batch()
@@ -88,7 +181,7 @@ class Simulation():
         piston_to_rod_angle = rod_direction_vector.angle_between(Vector(0, 1))
         total_downward_force = force + self.component_weight
 
-        return math.cos(piston_to_rod_angle) * total_downward_force
+        return total_downward_force/math.cos(piston_to_rod_angle)
  
     def transfer_force_to_crank(self, force, rod_direction_vector):
         normalised_angle = (-self.crank.angle_radians + math.pi/2) % (2 * math.pi)
@@ -167,7 +260,7 @@ class SimulationWindow(pyglet.window.Window):
         current_time = time.time()
 
         if current_time - self.last_update_time >= 1:
-            print(f"Simulation updates per second: {self.simulation_update_count}")
+            #print(f"Simulation updates per second: {self.simulation_update_count}")
             self.simulation_update_count = 0  # Reset counter after printing
             self.last_update_time = current_time
     '''
