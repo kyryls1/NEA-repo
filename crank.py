@@ -1,5 +1,7 @@
 import pyglet
 import math
+import matplotlib.pyplot as plt
+import time
 
 class Crank():
     def __init__(self, radius, mass, batch):
@@ -13,7 +15,9 @@ class Crank():
         self.RADIUS = radius
         self.MASS = mass
         self.MOMENT_OF_INTERTIA = self.MASS * self.RADIUS**2
- 
+        self.torque_history = []
+        self.start_time = time.perf_counter()
+
         self.angular_velocity = 5 # fix to start properly later, but have this here so the engine actually starts
         self.angle_radians = 0
  
@@ -29,7 +33,7 @@ class Crank():
         return self.angular_velocity * dt
    
     def get_torque(self, force):
-        return force * self.RADIUS / 100
+        return force * self.RADIUS
  
     def update_angular_velocity(self, torque, dt):
         angular_momentum_change = torque * dt
@@ -44,6 +48,17 @@ class Crank():
  
     def update(self, force, dt):
         torque = self.get_torque(force)
-        print(torque)
+        # Store time and torque
+        self.torque_history.append((time.perf_counter() - self.start_time, torque))
+        #print(torque)
         self.update_angular_velocity(torque, dt)
         self.update_angle(self.get_delta_theta(dt))
+
+    def plot_torque(self):
+        times = [t[0] for t in self.torque_history]
+        torques = [t[1] for t in self.torque_history]
+        plt.plot(times, torques)
+        plt.xlabel('Time (s)')
+        plt.ylabel('Torque (N·m)')
+        plt.title('Crank Torque')
+        plt.show()

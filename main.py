@@ -3,7 +3,7 @@ import math
 import crank, connectorRod, piston
 import time
 from vector import Vector
-
+import threading
 
 class GasSimulation():
     def __init__(self):
@@ -217,6 +217,7 @@ class SimulationWindow(pyglet.window.Window):
         super().__init__(*args, **kwargs)
         self.set_minimum_size(width=400, height=300)
         self.simulation = Simulation(1, 1, 1, 1, 1)
+        self.paused = False
         self.fps_display = pyglet.window.FPSDisplay(self)
 
         self.simulation_update_count = 0
@@ -255,6 +256,8 @@ class SimulationWindow(pyglet.window.Window):
         self.batch2.draw()
  
     def update_simulation(self, dt):
+        if self.paused:
+            return
         self.simulation.update_all(dt)
         self.simulation_update_count += 1
         current_time = time.time()
@@ -305,6 +308,13 @@ class SimulationWindow(pyglet.window.Window):
             self.focus.caret.on_text_motion_select(motion)
 
     def on_key_press(self, symbol, modifiers):
+        if symbol == pyglet.window.key.P:
+            self.paused = not self.paused
+            #graph_thread.join()
+            if self.paused:
+                graph_thread = threading.Thread(target=self.simulation.crank.plot_torque)
+                graph_thread.start()
+
         if symbol == pyglet.window.key.TAB:
             if modifiers & pyglet.window.key.MOD_SHIFT:
                 direction = -1
@@ -323,6 +333,7 @@ class SimulationWindow(pyglet.window.Window):
             #pyglet.app.exit()
 
         elif symbol == pyglet.window.key.ENTER:
+            pyglet.app.exit()
             my_text = float(self.widgets[0].document.text)
             self.simulation = Simulation(1, 1, 1, 1, my_text)
             self.widgets[0].document.text = ""
@@ -344,3 +355,4 @@ if __name__ == "__main__":
     pyglet.clock.schedule_interval(simulation.update_simulation, 1/1000)
     #pyglet.options['com_mta'] = True
     pyglet.app.run(interval=1/30)
+    #simulation.simulation.crank.plot_torque()
