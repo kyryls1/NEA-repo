@@ -263,7 +263,7 @@ class SimulationWindow(pyglet.window.Window):
         current_time = time.time()
 
         if current_time - self.last_update_time >= 1:
-            #print(f"Simulation updates per second: {self.simulation_update_count}")
+            print(f"Simulation updates per second: {self.simulation_update_count}")
             self.simulation_update_count = 0  # Reset counter after printing
             self.last_update_time = current_time
     '''
@@ -352,7 +352,7 @@ class SimulationWindow(pyglet.window.Window):
 
 if __name__ == "__main__":
     simulation = SimulationWindow(width=1280, height=720, caption="Simulation", resizable = True, vsync=False)
-    pyglet.clock.schedule_interval(simulation.update_simulation, 1/1000)
+    pyglet.clock.schedule_interval(simulation.update_simulation, 1/3000)
     #pyglet.options['com_mta'] = True
     pyglet.app.run(interval=1/30)
     #simulation.simulation.crank.plot_torque()
