@@ -52,19 +52,15 @@ class GasSimulation():
         return force
 
 class Simulation():
-    def __init__(self, radius, crank_mass, rod_mass, piston_mass, piston_radius):
-        self.batch = pyglet.graphics.Batch()
+    def __init__(self, radius, crank_mass, rod_mass, piston_mass, piston_radius, batch):
+        self.batch = batch
  
-        self.crank = crank.Crank(radius, crank_mass, self.batch)
-        self.piston = piston.Piston(piston_mass,  piston_radius, self.batch)
-        self.rod = connectorRod.ConnectorRod(rod_mass, self.batch)
+        self.crank = crank.Crank(radius, crank_mass, batch)
+        self.piston = piston.Piston(piston_mass,  piston_radius, batch)
+        self.rod = connectorRod.ConnectorRod(rod_mass, batch)
 
         self.component_weight = (rod_mass + piston_mass) * 9.81
         self.gas_simulation = GasSimulation()
-        
-
-    def draw(self):
-        self.batch.draw()
  
     def update_all(self, dt):
         force = self.gas_simulation.calculate_force(self.crank.angle_radians, dt)
@@ -101,30 +97,34 @@ class Simulation():
         else:
             return math.cos(rod_to_crank_angle) * force
         
-class TextWidget:
-    def __init__(self, text, x, y, width, batch):
-        self.document = pyglet.text.document.UnformattedDocument(text)
-        self.document.set_style(0, len(self.document.text), dict(color=(0, 0, 0, 255)))
-        font = self.document.get_font()
-        height = font.ascent - font.descent
+class TextBox:
+    def __init__(self, label, x, y, width, batch):
+        self.document = pyglet.text.document.UnformattedDocument()
+        self.label = pyglet.text.Label(label, x=x, y=y, anchor_y='bottom', batch=batch)
 
-        self.layout = pyglet.text.layout.IncrementalTextLayout(self.document, x, y, 0, width, height,
-                                                               batch=batch)
+        font_size = self.document.get_font()
+        height = font_size.ascent - font_size.descent
+        self.layout = pyglet.text.layout.IncrementalTextLayout(self.document, x+120, y, 0, width, height, batch=batch)
         self.caret = pyglet.text.caret.Caret(self.layout)
-        # Rectangular outline
-        pad = 2
-        self.rectangle = pyglet.shapes.Rectangle(x - pad, y - pad, width + pad, height + pad,
-                                                 color=(200, 200, 220), batch=batch)
 
-    def hit_test(self, x, y):
-        return (0 < x - self.layout.x < self.layout.width and
-                0 < y - self.layout.y < self.layout.height)
+        padding = 2
+        self.textbox_background = pyglet.shapes.Rectangle(x + 120 - padding, y - padding, width + padding, height + padding, color=(200, 200, 220), batch=batch)
+
+    def is_mouseover(self, x, y):
+        horizontal_distance = x - self.layout.x
+        vertical_distance = y - self.layout.y
+
+        is_within_horizontal_bounds = 0 < horizontal_distance < self.layout.width
+        is_within_vertical_bounds = 0 < vertical_distance < self.layout.height
+
+        return is_within_horizontal_bounds and is_within_vertical_bounds
 
 class SimulationWindow(pyglet.window.Window):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.set_minimum_size(width=400, height=300)
-        self.simulation = Simulation(1, 1, 1, 1, 1)
+        self.batch = pyglet.graphics.Batch()
+        self.simulation = Simulation(1, 1, 1, 1, 1, self.batch)
         self.paused = False
         self.fps_display = pyglet.window.FPSDisplay(self)
 
@@ -132,22 +132,10 @@ class SimulationWindow(pyglet.window.Window):
         self.last_update_time = time.time()
 
 #work in progress text boxes
-
-        self.batch2 = pyglet.graphics.Batch()
-
-        self.labels = [
-            pyglet.text.Label('Width', x=10, y=100, anchor_y='bottom',
-                              color=(255, 255, 255, 255), batch=self.batch2),
-            pyglet.text.Label('test', x=10, y=60, anchor_y='bottom',
-                              color=(255, 255, 255, 255), batch=self.batch2),
-            pyglet.text.Label('test2', x=10, y=20,
-                              anchor_y='bottom', color=(255, 255, 255, 255),
-                              batch=self.batch2),
-        ]
         self.widgets = [
-            TextWidget('This is a test', 200, 100, self.width - 210, self.batch2),
-            TextWidget('This is a test', 200, 60, self.width - 210, self.batch2),
-            TextWidget('This is a test', 200, 20, self.width - 210, self.batch2),
+            TextBox("Piston Radius/m",200, 100, 50, self.batch),
+            TextBox("2", 200, 60, self.width - 210, self.batch),
+            TextBox("4", 200, 20, self.width - 210, self.batch),
         ]
         self.text_cursor = self.get_system_mouse_cursor('text')
 
@@ -157,9 +145,8 @@ class SimulationWindow(pyglet.window.Window):
 
     def on_draw(self):
         self.clear()
-        self.simulation.draw()
+        self.batch.draw()
         self.fps_display.draw()
-        self.batch2.draw()
  
     def update_simulation(self, dt):
         if self.paused:
@@ -169,7 +156,7 @@ class SimulationWindow(pyglet.window.Window):
         current_time = time.time()
 
         if current_time - self.last_update_time >= 1:
-            print(f"Simulation updates per second: {self.simulation_update_count}")
+            #print(f"Simulation updates per second: {self.simulation_update_count}")
             self.simulation_update_count = 0 
             self.last_update_time = current_time
     '''
@@ -180,7 +167,7 @@ class SimulationWindow(pyglet.window.Window):
     '''
     def on_mouse_motion(self, x, y, dx, dy):
         for widget in self.widgets:
-            if widget.hit_test(x, y):
+            if widget.is_mouseover(x, y):
                 self.set_mouse_cursor(self.text_cursor)
                 break
         else:
@@ -188,7 +175,7 @@ class SimulationWindow(pyglet.window.Window):
 
     def on_mouse_press(self, x, y, button, modifiers):
         for widget in self.widgets:
-            if widget.hit_test(x, y):
+            if widget.is_mouseover(x, y):
                 self.set_focus(widget)
                 break
         else:
@@ -235,9 +222,8 @@ class SimulationWindow(pyglet.window.Window):
             self.set_focus(self.widgets[(i + direction) % len(self.widgets)])
 
         elif symbol == pyglet.window.key.ENTER:
-            pyglet.app.exit()
             my_text = float(self.widgets[0].document.text)
-            self.simulation = Simulation(1, 1, 1, 1, my_text)
+            self.simulation = Simulation(1, 1, 1, 1, my_text, self.batch)
             self.widgets[0].document.text = ""
 
     def set_focus(self, focus):
