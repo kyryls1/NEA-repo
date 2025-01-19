@@ -1,10 +1,11 @@
 import pyglet
 import math
-import crank, connectorRod, piston
+import mechanicalComponents
 import time
 from vector import Vector
 import threading
 import matplotlib.pyplot as plt
+from renderer import Renderer
 
 class GasSimulation():
     def __init__(self):
@@ -53,12 +54,10 @@ class GasSimulation():
         return force
 
 class Simulation():
-    def __init__(self, radius, crank_mass, rod_mass, piston_mass, piston_radius, batch):
-        self.batch = batch
- 
-        self.crank = crank.Crank(radius, crank_mass, batch)
-        self.piston = piston.Piston(piston_mass,  piston_radius, batch)
-        self.rod = connectorRod.ConnectorRod(rod_mass, batch)
+    def __init__(self, radius, crank_mass, rod_mass, piston_mass, piston_radius): 
+        self.crank = mechanicalComponents.Crank(radius, crank_mass)
+        self.piston = mechanicalComponents.Piston(piston_mass,  piston_radius)
+        self.rod = mechanicalComponents.ConnectorRod(rod_mass)
 
         self.component_weight = (rod_mass + piston_mass) * 9.81
         self.gas_simulation = GasSimulation()
@@ -71,7 +70,7 @@ class Simulation():
 
         self.crank.update(force_tangent_to_crank, dt)
         self.rod.update(self.crank.calculate_delta_theta(dt))
-        self.piston.update(self.rod.rod.y2)
+        self.piston.update(self.rod.rod_end.y)
  
     def find_normal_to_crank_motion(self, theta):
         if theta == math.pi/2:
@@ -80,7 +79,7 @@ class Simulation():
             return Vector(1, math.tan(theta))
    
     def find_rod_direction_vector(self):
-        return Vector(self.rod.rod.x2 - self.rod.rod.x, self.rod.rod.y2 - self.rod.rod.y) #this naming convention looks so stupid
+        return Vector(self.rod.rod_end.x - self.rod.rod_start.x, self.rod.rod_end.y - self.rod.rod_start.y) #this naming convention looks so stupid
     
     def transfer_force_to_rod(self, force, rod_direction_vector):
         piston_to_rod_angle = rod_direction_vector.angle_between(Vector(0, 1))
@@ -179,7 +178,7 @@ class SimulationWindow(pyglet.window.Window):
 
         # Position Buttons side by side below TextBoxes
         buttons_y = ui_start_y - 5 * ui_spacing - 20  # 20px padding below the last textbox
-        self.buttons = [
+        self.button_widgets = [
             Button("Pause/Unpause", ui_start_x, buttons_y, button_width, button_height, 
                    self.toggle_simulation_pause, self.static_batch),
             Button("Start Simulation", ui_start_x + button_width + button_spacing, buttons_y, 
@@ -199,6 +198,7 @@ class SimulationWindow(pyglet.window.Window):
         if self.simulation_paused:
             return
         self.simulation.update_all(dt)
+        self.renderer.render(self.simulation.crank, self.simulation.rod, self.simulation.piston)
         self.simulation_update_count += 1
         '''
         current_time = time.time()
@@ -217,7 +217,9 @@ class SimulationWindow(pyglet.window.Window):
         self.simulation_batch = pyglet.graphics.Batch()
         parameters = [widget.document.text for widget in self.widgets]
         self.simulation_parameters = list(map(float, parameters))
-        self.simulation = Simulation(*self.simulation_parameters, self.simulation_batch)
+        self.simulation = Simulation(*self.simulation_parameters)
+        origin = Vector(400, 400)
+        self.renderer = Renderer(self.simulation_batch, origin)
         plt.close()
         self.simulation_paused = False
 
@@ -246,25 +248,26 @@ class SimulationWindow(pyglet.window.Window):
             self.set_mouse_cursor(None)
 
     def on_mouse_press(self, x, y, button, modifiers):
-        for button in self.buttons:
-            if button.is_mouseover(x, y):
-                button.on_click()
-                return
+        if button == pyglet.window.mouse.LEFT:
+            for button_widget in self.button_widgets:
+                if button_widget.is_mouseover(x, y):
+                    button_widget.on_click()
+                    return
 
-        for widget in self.widgets:
-            if widget.is_mouseover(x, y):
-                if self.focused_widget == widget:
-                    break
-                else:
-                    self.focus_widget(widget)
-                    break
-        else:
+            for widget in self.widgets:
+                if widget.is_mouseover(x, y):
+                    if self.focused_widget == widget:
+                        break
+                    else:
+                        self.focus_widget(widget)
+                        break
+            else:
+                if self.is_focused_widget_set():
+                    self.focused_widget.clear_focus()
+                    self.focused_widget = None
+
             if self.is_focused_widget_set():
-                self.focused_widget.clear_focus()
-                self.focused_widget = None
-
-        if self.is_focused_widget_set():
-            self.focused_widget.caret.on_mouse_press(x, y, button, modifiers)
+                self.focused_widget.caret.on_mouse_press(x, y, button_widget, modifiers)
 
     def on_mouse_drag(self, x, y, dx, dy, buttons, modifiers):
         if self.is_focused_widget_set():
