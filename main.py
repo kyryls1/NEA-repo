@@ -54,23 +54,24 @@ class GasSimulation():
         return force
 
 class Simulation():
-    def __init__(self, radius, crank_mass, rod_mass, piston_mass, piston_radius): 
-        self.crank = mechanicalComponents.Crank(radius, crank_mass)
-        self.piston = mechanicalComponents.Piston(piston_mass,  piston_radius)
-        self.rod = mechanicalComponents.ConnectorRod(rod_mass)
+    def __init__(self, crank_radius, crank_mass, connectorRod_length, rod_mass, piston_radius, piston_mass): 
+        self.crank = mechanicalComponents.Crank(crank_radius, crank_mass)
+        self.piston = mechanicalComponents.Piston(piston_mass,  piston_radius, crank_radius + connectorRod_length)
+        self.connector_rod = mechanicalComponents.ConnectorRod(rod_mass, connectorRod_length, crank_radius)
 
         self.component_weight = (rod_mass + piston_mass) * 9.81
         self.gas_simulation = GasSimulation()
  
     def update_all(self, dt):
-        force = self.gas_simulation.calculate_force(self.crank.angle_radians, dt)
+        gas_force = self.gas_simulation.calculate_force(self.crank.angle_radians, dt)
+        total_force = gas_force + self.component_weight
         rod_direction_vector = self.find_rod_direction_vector()
-        force_parallel_to_rod = self.transfer_force_to_rod(force, rod_direction_vector)
+        force_parallel_to_rod = self.transfer_force_to_rod(total_force, rod_direction_vector)
         force_tangent_to_crank = self.transfer_force_to_crank(force_parallel_to_rod, rod_direction_vector)
 
         self.crank.update(force_tangent_to_crank, dt)
-        self.rod.update(self.crank.calculate_delta_theta(dt))
-        self.piston.update(self.rod.rod_end.y)
+        self.connector_rod.update(self.crank.calculate_delta_theta(dt))
+        self.piston.update(self.connector_rod.rod_end.y)
  
     def find_normal_to_crank_motion(self, theta):
         if theta == math.pi/2:
@@ -79,7 +80,7 @@ class Simulation():
             return Vector(1, math.tan(theta))
    
     def find_rod_direction_vector(self):
-        return Vector(self.rod.rod_end.x - self.rod.rod_start.x, self.rod.rod_end.y - self.rod.rod_start.y) #this naming convention looks so stupid
+        return Vector(self.connector_rod.rod_end.x - self.connector_rod.rod_start.x, self.connector_rod.rod_end.y - self.connector_rod.rod_start.y) #this naming convention looks so stupid
     
     def transfer_force_to_rod(self, force, rod_direction_vector):
         piston_to_rod_angle = rod_direction_vector.angle_between(Vector(0, 1))
@@ -99,7 +100,9 @@ class Simulation():
         
 class Button:
     def __init__(self, label, x, y, width, height, callback, batch):
-        self.label = pyglet.text.Label(label, x=x, y=y, color = (0, 0, 0), batch=batch)
+        label_x = x + width/2
+        label_y = y + height/2
+        self.label = pyglet.text.Label(label, label_x, label_y, anchor_x='center', anchor_y='center', color = (0, 0, 0), batch=batch)
         self.bounding_box = pyglet.shapes.Rectangle(x, y, width, height, color=(200, 200, 220), batch=batch)
         self.callback = callback
 
@@ -115,15 +118,15 @@ class Button:
 class TextBox:
     def __init__(self, label, x, y, width, batch):
         self.document = pyglet.text.document.UnformattedDocument()
-        self.label = pyglet.text.Label(label, x=x, y=y, anchor_y='bottom', batch=batch)
+        self.label = pyglet.text.Label(label, x=x - 10, y=y, anchor_x='right', anchor_y='bottom', batch=batch)
 
         font_size = self.document.get_font()
         height = font_size.ascent - font_size.descent
-        self.layout = pyglet.text.layout.IncrementalTextLayout(self.document, x+120, y, 0, width, height, batch=batch)
+        self.layout = pyglet.text.layout.IncrementalTextLayout(self.document, x, y, 0, width, height, batch=batch)
         self.caret = pyglet.text.caret.Caret(self.layout)
 
         padding = 2
-        self.textbox_background = pyglet.shapes.Rectangle(x + 120 - padding, y - padding, width + padding, height + padding, color=(200, 200, 220), batch=batch)
+        self.textbox_background = pyglet.shapes.Rectangle(x - padding, y - padding, width + padding, height + padding, color=(200, 200, 220), batch=batch)
 
     def is_mouseover(self, x, y):
         horizontal_distance = x - self.layout.x
@@ -145,39 +148,33 @@ class SimulationWindow(pyglet.window.Window):
     def __init__(self, *args, **kwargs):
         kwargs.update({'width': 1200, 'height': 720, 'resizable': False})
         super().__init__(*args, **kwargs)
-        self.set_minimum_size(width=1000, height=720)
         self.static_batch = pyglet.graphics.Batch()
-        self.simulation_batch = pyglet.graphics.Batch()
         self.simulation_paused = True
         self.fps_display = pyglet.window.FPSDisplay(self)
-
-        self.simulation_parameters = [0, 0, 0, 0, 0]
 
         self.simulation_update_count = 0
         self.last_update_time = time.time()
 
-        # Define UI Layout Constants
+        self.origin = Vector(300, 200)
         simulation_area_width = 700  # Width allocated for simulation on the left
         ui_start_x = simulation_area_width + 50  # Starting X position for UI elements
         ui_start_y = 650  # Starting Y position for the topmost UI element
         ui_spacing = 50  # Vertical spacing between UI elements
-        textbox_width = 200  # Width for textboxes
-        textbox_height = 30  # Height for textboxes
-        button_width = 180  # Width for buttons
-        button_height = 50  # Height for buttons
-        button_spacing = 20  # Horizontal spacing between buttons
+        textbox_width = 70
 
-        # Create TextBoxes aligned vertically
         self.widgets = [
-            TextBox("Input 1:", ui_start_x, ui_start_y, textbox_width, self.static_batch),
-            TextBox("Input 2:", ui_start_x, ui_start_y - ui_spacing, textbox_width, self.static_batch),
-            TextBox("Input 3:", ui_start_x, ui_start_y - 2 * ui_spacing, textbox_width, self.static_batch),
-            TextBox("Input 4:", ui_start_x, ui_start_y - 3 * ui_spacing, textbox_width, self.static_batch),
+            TextBox("Crank Radius:", ui_start_x, ui_start_y, textbox_width, self.static_batch),
+            TextBox("Crank Mass:", ui_start_x, ui_start_y - ui_spacing, textbox_width, self.static_batch),
+            TextBox("Connecting Rod Length:", ui_start_x, ui_start_y - 2 * ui_spacing, textbox_width, self.static_batch),
+            TextBox("Connecting Rod Mass:", ui_start_x, ui_start_y - 3 * ui_spacing, textbox_width, self.static_batch),
             TextBox("Piston Radius:", ui_start_x, ui_start_y - 4 * ui_spacing, textbox_width, self.static_batch),
+            TextBox("Piston Mass", ui_start_x, ui_start_y - 5 * ui_spacing, textbox_width, self.static_batch)
         ]
 
-        # Position Buttons side by side below TextBoxes
-        buttons_y = ui_start_y - 5 * ui_spacing - 20  # 20px padding below the last textbox
+        buttons_y = ui_start_y - 6 * ui_spacing - 20
+        button_width = 180  # Width for buttons
+        button_height = 50  # Height for buttons
+        button_spacing = 20
         self.button_widgets = [
             Button("Pause/Unpause", ui_start_x, buttons_y, button_width, button_height, 
                    self.toggle_simulation_pause, self.static_batch),
@@ -192,13 +189,14 @@ class SimulationWindow(pyglet.window.Window):
         self.clear()
         self.static_batch.draw()
         self.fps_display.draw()
-        self.simulation_batch.draw()
+        if hasattr(self, 'simulation_batch'):
+            self.renderer.render(self.simulation.crank, self.simulation.connector_rod, self.simulation.piston)
+            self.simulation_batch.draw()
  
     def update_simulation(self, dt):
         if self.simulation_paused:
             return
         self.simulation.update_all(dt)
-        self.renderer.render(self.simulation.crank, self.simulation.rod, self.simulation.piston)
         self.simulation_update_count += 1
         '''
         current_time = time.time()
@@ -207,19 +205,18 @@ class SimulationWindow(pyglet.window.Window):
             #print(f"Simulation updates per second: {self.simulation_update_count}")
             self.simulation_update_count = 0 
             self.last_update_time = current_time
-
-    def on_resize(self, width, height):
-        super(Window, self).on_resize(width, height)
-        for widget in self.widgets:
-            widget.width = width - 110
-    '''
+'''
     def start_simulation(self):
-        self.simulation_batch = pyglet.graphics.Batch()
         parameters = [widget.document.text for widget in self.widgets]
         self.simulation_parameters = list(map(float, parameters))
+        if self.simulation_parameters[2] <= self.simulation_parameters[0]:
+            print("Connector Rod Length cannot be smaller than Crank Radius")
+            return
+
+        self.simulation_batch = pyglet.graphics.Batch()
         self.simulation = Simulation(*self.simulation_parameters)
-        origin = Vector(400, 400)
-        self.renderer = Renderer(self.simulation_batch, origin)
+        self.renderer = Renderer(self.simulation_batch, self.origin, 
+                                 self.simulation_parameters[0], self.simulation_parameters[2], self.simulation_parameters[4])
         plt.close()
         self.simulation_paused = False
 
@@ -319,4 +316,4 @@ if __name__ == "__main__":
     simulation = SimulationWindow(width=1280, height=720, caption="Simulation", resizable = True, vsync=False)
     pyglet.clock.schedule_interval(simulation.update_simulation, 1/3000)
     #pyglet.options['com_mta'] = True
-    pyglet.app.run(interval=1/30)
+    pyglet.app.run(interval=1/60)

@@ -18,10 +18,6 @@ class Crank():
     def update_angle(self, delta_theta):
         self.angle_radians += delta_theta
         self.angle_radians %= (2 * math.pi)
-
-        #angle_degrees = math.degrees(self.angle_radians)
-        #self.crankarm.rotation = angle_degrees
-        #self.bearing.rotation = angle_degrees
  
     def calculate_delta_theta(self, dt):
         return self.angular_velocity * dt
@@ -44,7 +40,6 @@ class Crank():
         torque = self.calculate_torque(force)
         current_time = time.perf_counter() - self.start_time
         self.torque_history.append((current_time, torque))
-        #print(torque)
         self.update_angular_velocity(torque, dt)
         self.update_angle(self.calculate_delta_theta(dt))
 
@@ -58,15 +53,11 @@ class Crank():
         plt.show()
 
 class ConnectorRod():
-    def __init__(self, mass):
-        #self.rod = pyglet.shapes.Line(x=400, y=500, x2=400, y2=700, thickness=15, color=[201, 201, 201], batch=batch)
-        #self.crank_bearing = pyglet.shapes.Circle(x=400, y=500, radius=15, color=[201, 201, 201], batch=batch)
-        #self.piston_bearing = pyglet.shapes.Circle(x=400, y=700, radius=15, color=[201, 201, 201], batch=batch)
-       
+    def __init__(self, mass, length, crank_radius_offset):       
         self.MASS = mass
-        self.LENGTH = 200 #Remember to change this later!!
-        self.crank_anchor_vector = Vector(0, self.LENGTH/2)
-        self.rod_start = Vector(0, self.LENGTH/2)
+        self.LENGTH = length
+        self.crank_anchor_vector = Vector(0, crank_radius_offset)
+        self.rod_start = Vector(0, crank_radius_offset)
         self.rod_end = Vector(0, self.LENGTH)
  
     def update_crank_anchor_position(self, delta_theta):
@@ -95,10 +86,10 @@ class ConnectorRod():
         self.update_piston_anchor_position()
 
 class Piston():
-    def __init__(self, mass, radius):
-        self.RADIUS = radius * 100 #CHANGE THIS TO BE TO SCALE LATER!!
+    def __init__(self, mass, radius, origin):
+        self.RADIUS = radius #CHANGE THIS TO BE TO SCALE LATER!!
         self.MASS = mass
-        self.position = Vector(0, 200)
+        self.position = Vector(0, origin)
         #self.piston = pyglet.shapes.Rectangle(x=400-self.RADIUS, y=700, width=self.RADIUS*2, height=150, color=[255, 255, 255], batch=batch)
 
     def update(self, y_coordinate):
