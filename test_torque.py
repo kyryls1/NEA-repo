@@ -155,7 +155,7 @@ class TestTorqueSimulation:
             force_tangent_to_crank = self.transfer_force_to_crank(force_parallel_to_rod, rod_direction_vector, theta)
     
             # Calculate torque using Crank
-            torque = self.crank.get_torque(force_tangent_to_crank)
+            torque = self.crank.calculate_torque(force_tangent_to_crank)
     
             # Debug: Print torque
             # print(f"Theta: {theta:.2f} rad, Torque: {torque:.2f} Nm")

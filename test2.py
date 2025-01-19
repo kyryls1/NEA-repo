@@ -88,7 +88,7 @@ class Simulation():
         force_tangent = compute_force_tangent_to_crank(force_parallel, self.crank.angle_radians, rod_dx, rod_dy)
 
         self.crank.update(force_tangent, dt)
-        self.rod.update(self.crank.get_delta_theta(dt))
+        self.rod.update(self.crank.calculate_delta_theta(dt))
         self.piston.update(self.rod.rod.y2)
 
 class SimulationWindow(pyglet.window.Window):

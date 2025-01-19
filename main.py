@@ -4,6 +4,7 @@ import crank, connectorRod, piston
 import time
 from vector import Vector
 import threading
+import matplotlib.pyplot as plt
 
 class GasSimulation():
     def __init__(self):
@@ -69,7 +70,7 @@ class Simulation():
         force_tangent_to_crank = self.transfer_force_to_crank(force_parallel_to_rod, rod_direction_vector)
 
         self.crank.update(force_tangent_to_crank, dt)
-        self.rod.update(self.crank.get_delta_theta(dt))
+        self.rod.update(self.crank.calculate_delta_theta(dt))
         self.piston.update(self.rod.rod.y2)
  
     def find_normal_to_crank_motion(self, theta):
@@ -97,6 +98,21 @@ class Simulation():
         else:
             return math.cos(rod_to_crank_angle) * force
         
+class Button:
+    def __init__(self, label, x, y, width, height, callback, batch):
+        self.label = pyglet.text.Label(label, x=x, y=y, color = (0, 0, 0), batch=batch)
+        self.bounding_box = pyglet.shapes.Rectangle(x, y, width, height, color=(200, 200, 220), batch=batch)
+        self.callback = callback
+
+    def is_mouseover(self, x, y):
+        is_within_horizontal_bounds = self.bounding_box.x < x < self.bounding_box.x + self.bounding_box.width
+        is_within_vertical_bounds = self.bounding_box.y < y < self.bounding_box.y + self.bounding_box.height
+
+        return is_within_horizontal_bounds and is_within_vertical_bounds
+
+    def on_click(self):
+        self.callback()
+        
 class TextBox:
     def __init__(self, label, x, y, width, batch):
         self.document = pyglet.text.document.UnformattedDocument()
@@ -118,54 +134,110 @@ class TextBox:
         is_within_vertical_bounds = 0 < vertical_distance < self.layout.height
 
         return is_within_horizontal_bounds and is_within_vertical_bounds
+    
+    def set_focus(self):
+        self.caret.visible = True
+        self.caret.position = len(self.document.text)
+
+    def clear_focus(self):
+        self.caret.visible = False
 
 class SimulationWindow(pyglet.window.Window):
     def __init__(self, *args, **kwargs):
+        kwargs.update({'width': 1200, 'height': 720, 'resizable': False})
         super().__init__(*args, **kwargs)
-        self.set_minimum_size(width=400, height=300)
-        self.batch = pyglet.graphics.Batch()
-        self.simulation = Simulation(1, 1, 1, 1, 1, self.batch)
-        self.paused = False
+        self.set_minimum_size(width=1000, height=720)
+        self.static_batch = pyglet.graphics.Batch()
+        self.simulation_batch = pyglet.graphics.Batch()
+        self.simulation_paused = True
         self.fps_display = pyglet.window.FPSDisplay(self)
+
+        self.simulation_parameters = [0, 0, 0, 0, 0]
 
         self.simulation_update_count = 0
         self.last_update_time = time.time()
 
-#work in progress text boxes
-        self.widgets = [
-            TextBox("Piston Radius/m",200, 100, 50, self.batch),
-            TextBox("2", 200, 60, self.width - 210, self.batch),
-            TextBox("4", 200, 20, self.width - 210, self.batch),
-        ]
-        self.text_cursor = self.get_system_mouse_cursor('text')
+        # Define UI Layout Constants
+        simulation_area_width = 700  # Width allocated for simulation on the left
+        ui_start_x = simulation_area_width + 50  # Starting X position for UI elements
+        ui_start_y = 650  # Starting Y position for the topmost UI element
+        ui_spacing = 50  # Vertical spacing between UI elements
+        textbox_width = 200  # Width for textboxes
+        textbox_height = 30  # Height for textboxes
+        button_width = 180  # Width for buttons
+        button_height = 50  # Height for buttons
+        button_spacing = 20  # Horizontal spacing between buttons
 
-        self.focus = None
-        self.set_focus(self.widgets[0])
-        #work in progress
+        # Create TextBoxes aligned vertically
+        self.widgets = [
+            TextBox("Input 1:", ui_start_x, ui_start_y, textbox_width, self.static_batch),
+            TextBox("Input 2:", ui_start_x, ui_start_y - ui_spacing, textbox_width, self.static_batch),
+            TextBox("Input 3:", ui_start_x, ui_start_y - 2 * ui_spacing, textbox_width, self.static_batch),
+            TextBox("Input 4:", ui_start_x, ui_start_y - 3 * ui_spacing, textbox_width, self.static_batch),
+            TextBox("Piston Radius:", ui_start_x, ui_start_y - 4 * ui_spacing, textbox_width, self.static_batch),
+        ]
+
+        # Position Buttons side by side below TextBoxes
+        buttons_y = ui_start_y - 5 * ui_spacing - 20  # 20px padding below the last textbox
+        self.buttons = [
+            Button("Pause/Unpause", ui_start_x, buttons_y, button_width, button_height, 
+                   self.toggle_simulation_pause, self.static_batch),
+            Button("Start Simulation", ui_start_x + button_width + button_spacing, buttons_y, 
+                   button_width, button_height, self.start_simulation, self.static_batch)
+        ]
+
+        self.text_cursor = self.get_system_mouse_cursor('text')
+        self.focused_widget = None
 
     def on_draw(self):
         self.clear()
-        self.batch.draw()
+        self.static_batch.draw()
         self.fps_display.draw()
+        self.simulation_batch.draw()
  
     def update_simulation(self, dt):
-        if self.paused:
+        if self.simulation_paused:
             return
         self.simulation.update_all(dt)
         self.simulation_update_count += 1
+        '''
         current_time = time.time()
 
         if current_time - self.last_update_time >= 1:
             #print(f"Simulation updates per second: {self.simulation_update_count}")
             self.simulation_update_count = 0 
             self.last_update_time = current_time
-    '''
+
     def on_resize(self, width, height):
         super(Window, self).on_resize(width, height)
         for widget in self.widgets:
             widget.width = width - 110
     '''
-    def on_mouse_motion(self, x, y, dx, dy):
+    def start_simulation(self):
+        self.simulation_batch = pyglet.graphics.Batch()
+        parameters = [widget.document.text for widget in self.widgets]
+        self.simulation_parameters = list(map(float, parameters))
+        self.simulation = Simulation(*self.simulation_parameters, self.simulation_batch)
+        plt.close()
+        self.simulation_paused = False
+
+    def toggle_simulation_pause(self):
+        if self.simulation is not None:
+            self.simulation_paused = not self.simulation_paused
+            if self.simulation_paused:
+                graph_thread = threading.Thread(target=self.simulation.crank.plot_torque)
+                graph_thread.start()
+
+    def is_focused_widget_set(self):
+        return self.focused_widget is not None
+
+    def focus_widget(self, widget):
+        if self.is_focused_widget_set():
+            self.focused_widget.clear_focus()
+        widget.set_focus()
+        self.focused_widget = widget
+        
+    def on_mouse_motion(self, x, y, _dx, _dy):
         for widget in self.widgets:
             if widget.is_mouseover(x, y):
                 self.set_mouse_cursor(self.text_cursor)
@@ -174,69 +246,71 @@ class SimulationWindow(pyglet.window.Window):
             self.set_mouse_cursor(None)
 
     def on_mouse_press(self, x, y, button, modifiers):
+        for button in self.buttons:
+            if button.is_mouseover(x, y):
+                button.on_click()
+                return
+
         for widget in self.widgets:
             if widget.is_mouseover(x, y):
-                self.set_focus(widget)
-                break
+                if self.focused_widget == widget:
+                    break
+                else:
+                    self.focus_widget(widget)
+                    break
         else:
-            self.set_focus(None)
+            if self.is_focused_widget_set():
+                self.focused_widget.clear_focus()
+                self.focused_widget = None
 
-        if self.focus:
-            self.focus.caret.on_mouse_press(x, y, button, modifiers)
+        if self.is_focused_widget_set():
+            self.focused_widget.caret.on_mouse_press(x, y, button, modifiers)
 
     def on_mouse_drag(self, x, y, dx, dy, buttons, modifiers):
-        if self.focus:
-            self.focus.caret.on_mouse_drag(x, y, dx, dy, buttons, modifiers)
+        if self.is_focused_widget_set():
+            self.focused_widget.caret.on_mouse_drag(x, y, dx, dy, buttons, modifiers)
 
     def on_text(self, text):
-        if self.focus:
-            self.focus.caret.on_text(text)
+        if text in ("\r", "\n"):
+            return
+        if self.is_focused_widget_set():
+            allowed_chars = "0123456789."
+            if text not in allowed_chars:
+                return
+            if text == "." and "." in self.focused_widget.document.text:
+                return
+            
+            self.focused_widget.caret.on_text(text)
 
     def on_text_motion(self, motion):
-        if self.focus:
-            self.focus.caret.on_text_motion(motion)
+        if self.is_focused_widget_set():
+            self.focused_widget.caret.on_text_motion(motion)
 
     def on_text_motion_select(self, motion):
-        if self.focus:
-            self.focus.caret.on_text_motion_select(motion)
+        if self.is_focused_widget_set():
+            self.focused_widget.caret.on_text_motion_select(motion)
 
     def on_key_press(self, symbol, modifiers):
         if symbol == pyglet.window.key.P:
-            self.paused = not self.paused
-            if self.paused:
-                graph_thread = threading.Thread(target=self.simulation.crank.plot_torque)
-                graph_thread.start()
+            self.toggle_simulation_pause()
 
         if symbol == pyglet.window.key.TAB:
-            if modifiers & pyglet.window.key.MOD_SHIFT:
-                direction = -1
-            else:
-                direction = 1
-
-            if self.focus in self.widgets:
-                i = self.widgets.index(self.focus)
-            else:
-                i = 0
-                direction = 0
-
-            self.set_focus(self.widgets[(i + direction) % len(self.widgets)])
+            direction = -1 if (modifiers & pyglet.window.key.MOD_SHIFT) else 1
+            self.cycle_focus(direction)
 
         elif symbol == pyglet.window.key.ENTER:
-            my_text = float(self.widgets[0].document.text)
-            self.simulation = Simulation(1, 1, 1, 1, my_text, self.batch)
-            self.widgets[0].document.text = ""
+            if self.is_focused_widget_set():
 
-    def set_focus(self, focus):
-        if focus is self.focus:
-            return
+                self.cycle_focus(1)
 
-        if self.focus:
-            self.focus.caret.visible = False
-            self.focus.caret.mark = self.focus.caret.position = 0
+    def cycle_focus(self, direction):
+        if self.is_focused_widget_set():
+            index = self.widgets.index(self.focused_widget)
+            new_index = (index + direction) % len(self.widgets)
+        else:
+            new_index = 0
 
-        self.focus = focus
-        if self.focus:
-            self.focus.caret.visible = True
+        self.focus_widget(self.widgets[new_index])
 
 if __name__ == "__main__":
     simulation = SimulationWindow(width=1280, height=720, caption="Simulation", resizable = True, vsync=False)
