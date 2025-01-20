@@ -3,10 +3,6 @@ import math
 import mechanicalComponents
 import time
 from vector import Vector
-import matplotlib
-matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
-import multiprocessing
 from renderer import Renderer
 
 class GasSimulation():
@@ -221,11 +217,13 @@ class SimulationWindow(pyglet.window.Window):
             print("Connector Rod Length cannot be smaller than Crank Radius")
             return
 
+        if hasattr(self, 'renderer'):
+            self.renderer.close_plot()
+            
         self.simulation_batch = pyglet.graphics.Batch()
         self.simulation = Simulation(*self.simulation_parameters)
         self.renderer = Renderer(self.simulation_batch, self.origin, 
                                  self.simulation_parameters[0], self.simulation_parameters[2], self.simulation_parameters[4])
-        plt.close()
         self.start_time = time.perf_counter()
         self.elapsed_pause_time = 0
         self.simulation_paused = False
@@ -234,9 +232,14 @@ class SimulationWindow(pyglet.window.Window):
         if hasattr(self, 'simulation'):
             self.simulation_paused = not self.simulation_paused
             if self.simulation_paused:
+                self.button_widgets[0].callback = self.dummy_button
+                print("lol")
                 self.time_paused = time.perf_counter()
                 self.renderer.store_paused_point(self.time_paused - self.start_time - self.elapsed_pause_time)
                 self.renderer.plot_torque()
+                time.sleep(10)
+                self.button_widgets[0].callback = self.toggle_simulation_pause
+                print("arrusshifef")
                 #self.plot_process = multiprocessing.Process(target=self.renderer.plot_torque)
                 #self.plot_process.start()
             else:
@@ -245,6 +248,9 @@ class SimulationWindow(pyglet.window.Window):
                 time_resumed = time.perf_counter()
                 self.elapsed_pause_time += time_resumed - self.time_paused
                 self.renderer.close_plot()
+
+    def dummy_button(self):
+        print("I'm going to kill myself")
 
     def is_focused_widget_set(self):
         return self.focused_widget is not None
@@ -333,7 +339,6 @@ class SimulationWindow(pyglet.window.Window):
         self.focus_widget(self.widgets[new_index])
 
 if __name__ == "__main__":
-    multiprocessing.freeze_support()
     simulation = SimulationWindow(width=1280, height=720, caption="Simulation", resizable = True, vsync=False)
     pyglet.clock.schedule_interval(simulation.update_simulation, 1/3000) 
     #pyglet.options['com_mta'] = True

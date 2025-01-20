@@ -3,24 +3,9 @@ import math
 from linked_list import LinkedList
 import matplotlib.pyplot as plt
 import multiprocessing
-from multiprocessing import Value
-import ctypes
-
-def run_plot(times, torques, paused_points, main_thread_blocked):
-    plt.plot(times, torques, color='lightblue')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Torque (N·m)')
-    plt.title('Crank Torque')
-    for time in paused_points:
-        plt.axvline(x=time, color='r', linestyle='--', alpha=0.5)
-
-    plt.show()
-
-    main_thread_blocked.set()
 
 class Renderer:
     def __init__(self, batch, origin, crank_radius, rod_length, piston_radius):
-        self.main_thread_blocked = multiprocessing.Event()
         self.batch = batch
         self.origin = origin
         self.crank_radius = crank_radius
@@ -73,13 +58,21 @@ class Renderer:
         times = [t[0] for t in self.graph_points]
         torques = [t[1] for t in self.graph_points]
         paused_times = list(self.paused_points)
-        
-        self.main_thread_blocked.clear()
-        self.plot_process = multiprocessing.Process(target=run_plot, args=(times, torques, paused_times, self.main_thread_blocked))
+
+        self.plot_process = multiprocessing.Process(target=self.run_plot, args=(times, torques, paused_times))
         self.plot_process.start()
-        self.main_thread_blocked.wait()
+
+    @staticmethod
+    def run_plot(times, torques, paused_points):
+        plt.plot(times, torques, color='lightblue')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Torque (N·m)')
+        plt.title('Crank Torque')
+        for time in paused_points:
+            plt.axvline(x=time, color='r', linestyle='--', alpha=0.5)
+
+        plt.show()
 
     def close_plot(self):
         self.plot_process.terminate()
         plt.close()
-        self.main_thread_blocked[0] = False
