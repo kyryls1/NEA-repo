@@ -10,10 +10,10 @@ class Crank():
         self.MASS = mass
         self.MOMENT_OF_INTERTIA = self.MASS * self.RADIUS**2
         self.torque_history = LinkedList()
-        self.start_time = time.perf_counter()
 
         self.angular_velocity = 5 # fix to start properly later, but have this here so the engine actually starts
         self.angle_radians = 0
+        self.instantenous_torque = 0
  
     def update_angle(self, delta_theta):
         self.angle_radians += delta_theta
@@ -37,20 +37,9 @@ class Crank():
         #print(rpm)
  
     def update(self, force, dt):
-        torque = self.calculate_torque(force)
-        current_time = time.perf_counter() - self.start_time
-        self.torque_history.append((current_time, torque))
-        self.update_angular_velocity(torque, dt)
+        self.instantenous_torque = self.calculate_torque(force)
+        self.update_angular_velocity(self.instantenous_torque, dt)
         self.update_angle(self.calculate_delta_theta(dt))
-
-    def plot_torque(self):
-        times = [t[0] for t in self.torque_history]
-        torques = [t[1] for t in self.torque_history]
-        plt.plot(times, torques)
-        plt.xlabel('Time (s)')
-        plt.ylabel('Torque (N·m)')
-        plt.title('Crank Torque')
-        plt.show()
 
 class ConnectorRod():
     def __init__(self, mass, length, crank_radius_offset):       

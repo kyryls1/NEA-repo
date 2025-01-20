@@ -3,8 +3,10 @@ import math
 import mechanicalComponents
 import time
 from vector import Vector
-import threading
+import matplotlib
 import matplotlib.pyplot as plt
+
+import multiprocessing
 from renderer import Renderer
 
 class GasSimulation():
@@ -152,8 +154,9 @@ class SimulationWindow(pyglet.window.Window):
         self.simulation_paused = True
         self.fps_display = pyglet.window.FPSDisplay(self)
 
-        self.simulation_update_count = 0
-        self.last_update_time = time.time()
+        #self.pool = multiprocessing.Pool()
+
+        #self.simulation_update_count = 0
 
         self.origin = Vector(300, 200)
         simulation_area_width = 700  # Width allocated for simulation on the left
@@ -192,12 +195,17 @@ class SimulationWindow(pyglet.window.Window):
         if hasattr(self, 'simulation_batch'):
             self.renderer.render(self.simulation.crank, self.simulation.connector_rod, self.simulation.piston)
             self.simulation_batch.draw()
- 
+
+    def store_graph(self, torque):
+        current_time = time.perf_counter() - self.start_time - self.elapsed_pause_time
+        self.renderer.store_graph_point((current_time, torque))
+
     def update_simulation(self, dt):
         if self.simulation_paused:
             return
         self.simulation.update_all(dt)
-        self.simulation_update_count += 1
+        self.store_graph(self.simulation.crank.instantenous_torque)
+        #self.simulation_update_count += 1
         '''
         current_time = time.time()
 
@@ -218,14 +226,24 @@ class SimulationWindow(pyglet.window.Window):
         self.renderer = Renderer(self.simulation_batch, self.origin, 
                                  self.simulation_parameters[0], self.simulation_parameters[2], self.simulation_parameters[4])
         plt.close()
+        self.start_time = time.perf_counter()
+        self.elapsed_pause_time = 0
         self.simulation_paused = False
 
     def toggle_simulation_pause(self):
         if self.simulation is not None:
             self.simulation_paused = not self.simulation_paused
             if self.simulation_paused:
-                graph_thread = threading.Thread(target=self.simulation.crank.plot_torque)
-                graph_thread.start()
+                self.time_paused = time.perf_counter()
+                self.renderer.store_paused_point(self.time_paused - self.start_time - self.elapsed_pause_time)
+                self.renderer.plot_torque()
+            else:
+                # If a Matplotlib window is still open, close it
+                if self.renderer.graph_open:
+                    plt.close('all')
+                    self.renderer.graph_open = False
+                time_resumed = time.perf_counter()
+                self.elapsed_pause_time += time_resumed - self.time_paused
 
     def is_focused_widget_set(self):
         return self.focused_widget is not None
@@ -313,6 +331,7 @@ class SimulationWindow(pyglet.window.Window):
         self.focus_widget(self.widgets[new_index])
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     simulation = SimulationWindow(width=1280, height=720, caption="Simulation", resizable = True, vsync=False)
     pyglet.clock.schedule_interval(simulation.update_simulation, 1/3000)
     #pyglet.options['com_mta'] = True

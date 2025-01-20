@@ -1,6 +1,8 @@
 import pyglet
 from vector import Vector
 import math
+from linked_list import LinkedList
+import matplotlib.pyplot as plt
 
 class Renderer:
     def __init__(self, batch, origin, crank_radius, rod_length, piston_radius):
@@ -21,6 +23,11 @@ class Renderer:
                                                    radius=15, color=[201, 201, 201], batch=batch)
         self.rod = pyglet.shapes.Line(x=origin.x, y=origin.y + crank_radius, x2=origin.x, 
                                       y2=origin.y + crank_radius + rod_length, thickness=15, color=[201, 201, 201], batch=batch)
+        
+        self.graph_points = LinkedList()
+        self.paused_points = LinkedList()
+
+        self.graph_open = False
                                                   
     def render(self, crank, rod, piston):
         crank_x = self.origin.x
@@ -42,3 +49,22 @@ class Renderer:
 
         self.piston.x = crank_x - piston.RADIUS
         self.piston.y = crank_y + piston.position.y
+
+    def store_graph_point(self, point):
+        self.graph_points.append(point)
+
+    def store_paused_point(self, time):
+        self.paused_points.append(time)
+
+    def plot_torque(self):
+        times = [t[0] for t in self.graph_points]
+        torques = [t[1] for t in self.graph_points]
+        plt.plot(times, torques, color='lightblue')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Torque (N·m)')
+        plt.title('Crank Torque')
+        for time in self.paused_points:
+            plt.axvline(x=time, color='r', linestyle='--', alpha=0.5)
+
+        self.graph_open = True
+        plt.show()
