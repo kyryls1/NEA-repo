@@ -4,8 +4,8 @@ import mechanicalComponents
 import time
 from vector import Vector
 import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
-
 import multiprocessing
 from renderer import Renderer
 
@@ -192,8 +192,9 @@ class SimulationWindow(pyglet.window.Window):
         self.clear()
         self.static_batch.draw()
         self.fps_display.draw()
-        if hasattr(self, 'simulation_batch'):
-            self.renderer.render(self.simulation.crank, self.simulation.connector_rod, self.simulation.piston)
+        if hasattr(self, 'simulation'):
+            if not self.simulation_paused: 
+                self.renderer.render(self.simulation.crank, self.simulation.connector_rod, self.simulation.piston)
             self.simulation_batch.draw()
 
     def store_graph(self, torque):
@@ -201,11 +202,10 @@ class SimulationWindow(pyglet.window.Window):
         self.renderer.store_graph_point((current_time, torque))
 
     def update_simulation(self, dt):
-        if self.simulation_paused:
-            return
-        self.simulation.update_all(dt)
-        self.store_graph(self.simulation.crank.instantenous_torque)
-        #self.simulation_update_count += 1
+        if not self.simulation_paused:
+            self.simulation.update_all(dt)
+            self.store_graph(self.simulation.crank.instantenous_torque)
+            #self.simulation_update_count += 1
         '''
         current_time = time.time()
 
@@ -231,19 +231,20 @@ class SimulationWindow(pyglet.window.Window):
         self.simulation_paused = False
 
     def toggle_simulation_pause(self):
-        if self.simulation is not None:
+        if hasattr(self, 'simulation'):
             self.simulation_paused = not self.simulation_paused
             if self.simulation_paused:
                 self.time_paused = time.perf_counter()
                 self.renderer.store_paused_point(self.time_paused - self.start_time - self.elapsed_pause_time)
                 self.renderer.plot_torque()
+                #self.plot_process = multiprocessing.Process(target=self.renderer.plot_torque)
+                #self.plot_process.start()
             else:
                 # If a Matplotlib window is still open, close it
-                if self.renderer.graph_open:
-                    plt.close('all')
-                    self.renderer.graph_open = False
+                #self.plot_process.terminate()
                 time_resumed = time.perf_counter()
                 self.elapsed_pause_time += time_resumed - self.time_paused
+                self.renderer.close_plot()
 
     def is_focused_widget_set(self):
         return self.focused_widget is not None
@@ -263,26 +264,27 @@ class SimulationWindow(pyglet.window.Window):
             self.set_mouse_cursor(None)
 
     def on_mouse_press(self, x, y, button, modifiers):
-        if button == pyglet.window.mouse.LEFT:
-            for button_widget in self.button_widgets:
-                if button_widget.is_mouseover(x, y):
-                    button_widget.on_click()
-                    return
+        #if not hasattr(self, 'renderer'):
+            if button == pyglet.window.mouse.LEFT:
+                for button_widget in self.button_widgets:
+                    if button_widget.is_mouseover(x, y):
+                        button_widget.on_click()
+                        return
 
-            for widget in self.widgets:
-                if widget.is_mouseover(x, y):
-                    if self.focused_widget == widget:
-                        break
-                    else:
-                        self.focus_widget(widget)
-                        break
-            else:
+                for widget in self.widgets:
+                    if widget.is_mouseover(x, y):
+                        if self.focused_widget == widget:
+                            break
+                        else:
+                            self.focus_widget(widget)
+                            break
+                else:
+                    if self.is_focused_widget_set():
+                        self.focused_widget.clear_focus()
+                        self.focused_widget = None
+
                 if self.is_focused_widget_set():
-                    self.focused_widget.clear_focus()
-                    self.focused_widget = None
-
-            if self.is_focused_widget_set():
-                self.focused_widget.caret.on_mouse_press(x, y, button_widget, modifiers)
+                    self.focused_widget.caret.on_mouse_press(x, y, button_widget, modifiers)
 
     def on_mouse_drag(self, x, y, dx, dy, buttons, modifiers):
         if self.is_focused_widget_set():
@@ -333,6 +335,6 @@ class SimulationWindow(pyglet.window.Window):
 if __name__ == "__main__":
     multiprocessing.freeze_support()
     simulation = SimulationWindow(width=1280, height=720, caption="Simulation", resizable = True, vsync=False)
-    pyglet.clock.schedule_interval(simulation.update_simulation, 1/3000)
+    pyglet.clock.schedule_interval(simulation.update_simulation, 1/3000) 
     #pyglet.options['com_mta'] = True
     pyglet.app.run(interval=1/60)
