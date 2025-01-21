@@ -15,16 +15,16 @@ class Crank():
         self.angle_radians = 0
         self.instantenous_torque = 0
  
+    def calculate_torque(self, force):
+        return force * self.RADIUS
+
+    def calculate_delta_theta(self, dt):
+        return self.angular_velocity * dt
+
     def update_angle(self, delta_theta):
         self.angle_radians += delta_theta
         self.angle_radians %= (2 * math.pi)
- 
-    def calculate_delta_theta(self, dt):
-        return self.angular_velocity * dt
-   
-    def calculate_torque(self, force):
-        return force * self.RADIUS
- 
+
     def update_angular_velocity(self, torque, dt):
         angular_momentum_change = torque * dt
         angular_velocity_change = angular_momentum_change / self.MOMENT_OF_INTERTIA
