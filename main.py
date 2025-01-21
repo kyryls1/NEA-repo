@@ -58,9 +58,10 @@ class Simulation():
         self.crank = mechanicalComponents.Crank(crank_radius, crank_mass)
         self.piston = mechanicalComponents.Piston(piston_mass,  piston_radius, crank_radius + connectorRod_length)
         self.connector_rod = mechanicalComponents.ConnectorRod(rod_mass, connectorRod_length, crank_radius)
+        self.gas_simulation = GasSimulation()
 
         self.component_weight = (rod_mass + piston_mass) * 9.81
-        self.gas_simulation = GasSimulation()
+        self.last_load_force = 1.0
  
     def update_all(self, dt):
         gas_force = self.gas_simulation.calculate_force(self.crank.angle_radians, dt)
@@ -69,10 +70,17 @@ class Simulation():
         force_parallel_to_rod = self.transfer_force_to_rod(total_force, rod_direction_vector)
         force_tangent_to_crank = self.transfer_force_to_crank(force_parallel_to_rod, rod_direction_vector)
 
-        self.crank.update(force_tangent_to_crank, dt)
+        temperature = self.gas_simulation.get_temperature(self.crank.angle_radians)
+        friction_force = self.piston.calculate_friction(temperature, total_force, self.crank.angular_velocity)
+
+        net_force_tangent = force_tangent_to_crank + friction_force
+
+        self.crank.update(net_force_tangent, dt)
         self.connector_rod.update(self.crank.calculate_delta_theta(dt))
         self.piston.update(self.connector_rod.rod_end.y)
- 
+        self.piston.update_velocity(dt)
+        self.last_load_force = total_force
+
     def find_normal_to_crank_motion(self, theta):
         if theta == math.pi/2:
             return Vector(0, 1)
@@ -84,9 +92,8 @@ class Simulation():
     
     def transfer_force_to_rod(self, force, rod_direction_vector):
         piston_to_rod_angle = rod_direction_vector.angle_between(Vector(0, 1))
-        total_downward_force = force + self.component_weight
 
-        return total_downward_force/math.cos(piston_to_rod_angle)
+        return force/math.cos(piston_to_rod_angle)
  
     def transfer_force_to_crank(self, force, rod_direction_vector):
         normalised_angle = (-self.crank.angle_radians + math.pi/2) % (2 * math.pi)
@@ -192,7 +199,7 @@ class SimulationWindow(pyglet.window.Window):
                             piston_radius = ?, 
                             piston_mass = ?
                         WHERE timestamp = ?
-                    ''', (new_save_time, configuration_name, *self.simulation_parameters, self.save_time))
+                    ''', (new_save_time, configuration_name, *self.renderer_parameters, self.save_time))
                     
                     self.save_time = new_save_time
                     conn.commit()
@@ -215,7 +222,7 @@ class SimulationWindow(pyglet.window.Window):
                     cursor.execute('''
                         INSERT INTO engine_designs 
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (self.save_time, configuration_name, *self.simulation_parameters))
+                    ''', (self.save_time, configuration_name, *self.renderer_parameters))
                     
                     conn.commit()
                     conn.close()
@@ -225,18 +232,23 @@ class SimulationWindow(pyglet.window.Window):
 
     def start_simulation(self):
         parameters = [widget.document.text for widget in self.widgets[0:6]]
-        self.simulation_parameters = list(map(float, parameters))
-        if self.simulation_parameters[2] <= self.simulation_parameters[0]:
+        self.renderer_parameters = list(map(float, parameters))
+        if self.renderer_parameters[2] <= self.renderer_parameters[0]:
             print("Connector Rod Length cannot be smaller than Crank Radius")
             return
 
-        if hasattr(self, 'renderer'):
+        if hasattr(self, 'renderer.plot_process') and self.renderer.plot_process.is_alive():
             self.renderer.close_plot()
             
         self.simulation_batch = pyglet.graphics.Batch()
-        self.simulation = Simulation(*self.simulation_parameters)
+        simulation_parameters = self.renderer_parameters.copy()
+        for i in [0, 2, 4]:
+            simulation_parameters[i] = self.mm_to_m(simulation_parameters[i])
+
+        #simulation_parameters = list(map(self.mm_to_m, simulation_parameters))
+        self.simulation = Simulation(*simulation_parameters)
         self.renderer = Renderer(self.simulation_batch, self.origin, 
-                                 self.simulation_parameters[0], self.simulation_parameters[2], self.simulation_parameters[4])
+                                 self.renderer_parameters[0], self.renderer_parameters[2], self.renderer_parameters[4])
         self.start_time = time.perf_counter()
         self.elapsed_pause_time = 0
         self.button_widgets[2].label.text = "Save Parameters"
@@ -255,6 +267,12 @@ class SimulationWindow(pyglet.window.Window):
                 time_resumed = time.perf_counter()
                 self.elapsed_pause_time += time_resumed - self.time_paused
                 self.renderer.close_plot()
+
+    def mm_to_m(self, value):
+        return value / 1000.0
+
+    def m_to_mm(self, value):
+        return value * 1000.0
 
     def get_database_entries(self):
         conn = sqlite3.connect('database.db')

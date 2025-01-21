@@ -2,10 +2,10 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 
-class GasSimulation:
+class GasSimulation():
     def __init__(self):
-        self.t_max = 2273  # Maximum temperature at ignition (in Kelvin)
-        self.t_min = 623   # Minimum temperature after expansion (in Kelvin)
+        self.t_max = 2273    # in Kelvin
+        self.t_min = 623     # in Kelvin
         self.mol_max = 0.748
         self.mol_min = 0.594
         self.vol_max = 0.5
@@ -13,24 +13,24 @@ class GasSimulation:
         self.t_difference = self.t_max - self.t_min
 
     def get_temperature(self, theta):
-        theta_mod = theta % (2 * math.pi)
+        # Assuming a sinusoidal temperature variation
+        return self.t_min + (self.t_max - self.t_min) * (math.sin(theta) + 1) / 2
 
-        # 1) Near ignition (theta ~ 0 rad), temperature is briefly at max:
-        if 0 <= theta_mod < 0.1:
-            return self.t_max
+    def get_gas_mol(self, theta):
+        # Assuming gas moles vary sinusoidally
+        return self.mol_min + (self.mol_max - self.mol_min) * (math.sin(theta) + 1) / 2
 
-        # 2) From theta=0.1 to theta=pi, exponentially decay from max to min:
-        elif 0.1 <= theta_mod <= math.pi:
-            k = 2  # Decay rate calculated for ~99% decay by theta=pi
-            return self.t_min + (self.t_max - self.t_min) * math.exp(-k * (theta_mod - 0.1))
+    def get_height(self, theta):
+        # Placeholder function for cylinder height based on theta
+        return self.vol_min + (self.vol_max - self.vol_min) * (math.sin(theta) + 1) / 2
 
-        # 3) From theta=pi to theta=2pi, stay near min but allow a small “compression” bump:
-        else:
-            fraction = (theta_mod - math.pi) / math.pi  # Goes 0→1 as theta goes pi→2pi
-            amplitude = 0.1 * (self.t_max - self.t_min)  # 10% bump
-            # Rises to ~20% bump at 2pi because: 1 - cos(pi*1) = 2
-            return self.t_min + amplitude * (1 - math.cos(math.pi * fraction))
-
+    def calculate_force(self, theta, dt):
+        temperature = self.get_temperature(theta)
+        mols = self.get_gas_mol(theta)
+        pressure = mols * 8.31 * temperature  # PV = nRT => P = nRT/V
+        force = pressure * math.pi * (self.get_height(theta))**2  # Assuming cylindrical force distribution
+        return force
+    
 def main():
     # Instantiate the GasSimulation class
     sim = GasSimulation()
