@@ -119,8 +119,7 @@ class ListBox:
             row.label.x = self.x + self.padding
             row.label.y = row_y + self.item_height // 2
             current_y -= self.item_height
-
-        
+     
 class TextBox:
     def __init__(self, label, x, y, width, batch):
         self.document = pyglet.text.document.UnformattedDocument()

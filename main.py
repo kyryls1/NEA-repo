@@ -122,10 +122,11 @@ class SimulationWindow(pyglet.window.Window):
             widgets.TextBox("Connecting Rod Length:", ui_start_x, ui_start_y - 2 * ui_spacing, textbox_width, self.static_batch),
             widgets.TextBox("Connecting Rod Mass:", ui_start_x, ui_start_y - 3 * ui_spacing, textbox_width, self.static_batch),
             widgets.TextBox("Piston Radius:", ui_start_x, ui_start_y - 4 * ui_spacing, textbox_width, self.static_batch),
-            widgets.TextBox("Piston Mass", ui_start_x, ui_start_y - 5 * ui_spacing, textbox_width, self.static_batch)
+            widgets.TextBox("Piston Mass:", ui_start_x, ui_start_y - 5 * ui_spacing, textbox_width, self.static_batch),
+            widgets.TextBox("Configuration Name:", ui_start_x, ui_start_y - 6 * ui_spacing, textbox_width, self.static_batch)
         ]
 
-        buttons_y = ui_start_y - 6 * ui_spacing - 20
+        buttons_y = ui_start_y - 7 * ui_spacing - 20
         button_width = 180  # Width for buttons
         button_height = 50  # Height for buttons
         button_spacing = 20
@@ -172,32 +173,58 @@ class SimulationWindow(pyglet.window.Window):
 
     def save_parameters(self):
         if hasattr(self, 'simulation_parameters'): 
-            conn = sqlite3.connect('database.db')
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS engine_designs (
-                    crank_radius REAL,
-                    crank_mass REAL,
-                    rod_length REAL,
-                    rod_mass REAL,
-                    piston_radius REAL,
-                    piston_mass REAL,
-                    timestamp REAL
-                )
-            ''')
-            
-            cursor.execute('''
-                INSERT INTO engine_designs 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (*self.simulation_parameters, time.time()))
-            
-            conn.commit()
-            conn.close()
-            self.list_box.update_table(self.get_database_entries())
+            configuration_name = self.widgets[6].document.text
+            if configuration_name:
+                conn = sqlite3.connect('database.db')
+                cursor = conn.cursor()
+                
+                if self.button_widgets[2].label.text == "Overwrite Parameters":
+                    new_save_time = time.time()
+                    cursor.execute('''
+                        UPDATE engine_designs 
+                        SET 
+                            timestamp = ?, 
+                            configuration_name = ?, 
+                            crank_radius = ?, 
+                            crank_mass = ?, 
+                            rod_length = ?, 
+                            rod_mass = ?, 
+                            piston_radius = ?, 
+                            piston_mass = ?
+                        WHERE timestamp = ?
+                    ''', (new_save_time, configuration_name, *self.simulation_parameters, self.save_time))
+                    
+                    self.save_time = new_save_time
+                    conn.commit()
+                    conn.close()
+                else:
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS engine_designs (
+                            timestamp REAL PRIMARY KEY,
+                            configuration_name TEXT,
+                            crank_radius REAL,
+                            crank_mass REAL,
+                            rod_length REAL,
+                            rod_mass REAL,
+                            piston_radius REAL,
+                            piston_mass REAL
+                        )
+                    ''')
+                    
+                    self.save_time = time.time()
+                    cursor.execute('''
+                        INSERT INTO engine_designs 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (self.save_time, configuration_name, *self.simulation_parameters))
+                    
+                    conn.commit()
+                    conn.close()
+                    self.list_box.update_table(self.get_database_entries())
+                    self.widgets[6].document.text = ""
+                    self.button_widgets[2].label.text = "Overwrite Save"
 
     def start_simulation(self):
-        parameters = [widget.document.text for widget in self.widgets]
+        parameters = [widget.document.text for widget in self.widgets[0:6]]
         self.simulation_parameters = list(map(float, parameters))
         if self.simulation_parameters[2] <= self.simulation_parameters[0]:
             print("Connector Rod Length cannot be smaller than Crank Radius")
@@ -212,6 +239,7 @@ class SimulationWindow(pyglet.window.Window):
                                  self.simulation_parameters[0], self.simulation_parameters[2], self.simulation_parameters[4])
         self.start_time = time.perf_counter()
         self.elapsed_pause_time = 0
+        self.button_widgets[2].label.text = "Save Parameters"
         self.simulation_paused = False
 
     def toggle_simulation_pause(self):
@@ -233,10 +261,10 @@ class SimulationWindow(pyglet.window.Window):
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='engine_designs'")
         if cursor.fetchone() is not None:
-            cursor.execute('SELECT crank_radius, rod_length, piston_radius, timestamp FROM engine_designs')
+            cursor.execute('SELECT configuration_name FROM engine_designs')
             entries = cursor.fetchall()
             conn.close()
-            return [f"Crank: {entry[0]}, Rod: {entry[1]}, Piston: {entry[2]}, Time: {entry[3]}" for entry in entries]
+            return [entry[0] for entry in entries]
         else:
             conn.close()
             return []
@@ -311,11 +339,17 @@ class SimulationWindow(pyglet.window.Window):
         if text in ("\r", "\n"):
             return
         if self.is_focused_widget_set():
-            allowed_chars = "0123456789."
-            if text not in allowed_chars:
-                return
-            if text == "." and "." in self.focused_widget.document.text:
-                return
+            if self.focused_widget is not self.widgets[6]:
+                allowed_chars = "0123456789."
+                if text not in allowed_chars:
+                    return
+                if text == "." and "." in self.focused_widget.document.text:
+                    return
+            else:
+                if text == " " and self.focused_widget.document.text == "":
+                    return
+                elif len(self.focused_widget.document.text) >= 20:
+                    return
             
             self.focused_widget.caret.on_text(text)
 
