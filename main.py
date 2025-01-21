@@ -4,6 +4,7 @@ import mechanicalComponents
 import time
 from vector import Vector
 from renderer import Renderer
+import sqlite3
 
 class GasSimulation():
     def __init__(self):
@@ -109,9 +110,121 @@ class Button:
         is_within_vertical_bounds = self.bounding_box.y < y < self.bounding_box.y + self.bounding_box.height
 
         return is_within_horizontal_bounds and is_within_vertical_bounds
+    
+    def is_hover(self, x, y):
+        if self.is_mouseover(x, y):
+            self.bounding_box.color = (150, 150, 170)
+        else:
+            self.bounding_box.color = (200, 200, 220)
 
     def on_click(self):
         self.callback()
+
+class ListRow:
+    def __init__(self, text, x, y, width, height, batch):
+        self.text = text
+        label_x = x + width/2  # Match main.py style of division
+        label_y = y + height/2
+        self.label = pyglet.text.Label(
+            text, 
+            x=label_x, y=label_y,
+            anchor_x='center', anchor_y='center',
+            color=(0, 0, 0, 255),
+            batch=batch
+        )
+        self.bounding_box = pyglet.shapes.Rectangle(
+            x, y, width, height,
+            color=(200, 200, 220),  # Match Button default color
+            batch=batch
+        )
+
+    def is_mouseover(self, x, y):
+        return (self.bounding_box.x <= x <= self.bounding_box.x + self.bounding_box.width and
+                self.bounding_box.y <= y <= self.bounding_box.y + self.bounding_box.height)
+    
+    def set_hover(self, is_hover):
+        if is_hover:
+            self.bounding_box.color = (150, 150, 170)  # Match Button hover color
+        else:
+            self.bounding_box.color = (200, 200, 220)
+    
+
+class ListBox:
+    def __init__(self, items, x, y, width, height, batch):
+        self.items_data = items
+        self.rows = []
+        self.x, self.y = x, y
+        self.width, self.height = width, height
+        self.batch = batch
+        self.scroll_offset = 0
+        self.item_height = 30  # Match Button height style
+        self.visible_count = height // self.item_height
+        self.last_click_time = 0
+        self.last_click_index = None
+
+        # Create rows for each item
+        for item in items:
+            self.rows.append(ListRow(item, x, 0, width, self.item_height, batch))
+        self.update_row_positions()
+
+    
+    def update_row_positions(self):
+        start_idx = self.scroll_offset
+        end_idx = min(start_idx + self.visible_count, len(self.rows))
+        current_y = self.y + self.height
+        
+        for i, row in enumerate(self.rows):
+            if i < start_idx or i >= end_idx:
+                row.bounding_box.x = row.label.x = -9999
+                row.bounding_box.y = row.label.y = -9999
+                continue
+                
+            row_y = current_y - self.item_height
+            row.bounding_box.x = self.x
+            row.bounding_box.y = row_y
+            row.label.x = self.x + self.width // 2
+            row.label.y = row_y + self.item_height // 2
+            current_y -= self.item_height
+    def on_mouse_motion(self, mx, my, _dx, _dy):
+        # Reset hover
+        for row in self.rows:
+            row.set_hover(False)
+
+        # Ensure mouse is within listbox bounds
+        if not (self.x <= mx <= self.x + self.width and
+                self.y <= my <= self.y + self.height):
+            return None
+
+        # Calculate which row is hovered
+        relative_y = (self.y + self.height) - my
+        hover_idx = int(self.scroll_offset + (relative_y // self.item_height))
+
+        # Make sure index is in bounds
+        if 0 <= hover_idx < len(self.rows):
+            self.rows[hover_idx].set_hover(True)
+            return hover_idx
+        return None
+
+    def on_mouse_press(self, mx, my, button, modifiers):
+        if button == pyglet.window.mouse.LEFT:
+            clicked_idx = self.on_mouse_motion(mx, my, 0, 0)
+            if clicked_idx is not None:
+                current_time = time.time()
+                if (clicked_idx == self.last_click_index and
+                    current_time - self.last_click_time < 0.5):
+                    self.last_click_time = current_time
+                    return self.rows[clicked_idx].text
+                self.last_click_time = current_time
+                self.last_click_index = clicked_idx
+        return None
+
+    def on_mouse_scroll(self, x, y, scroll_x, scroll_y):
+        if not (self.x <= x <= self.x + self.width and
+                self.y <= y <= self.y + self.height):
+            return
+        max_offset = max(0, len(self.rows) - self.visible_count)
+        self.scroll_offset = min(max(0, self.scroll_offset - int(scroll_y)), max_offset)
+        self.update_row_positions()
         
 class TextBox:
     def __init__(self, label, x, y, width, batch):
@@ -180,6 +293,16 @@ class SimulationWindow(pyglet.window.Window):
             Button("Start Simulation", ui_start_x + button_width + button_spacing, buttons_y, 
                    button_width, button_height, self.start_simulation, self.static_batch)
         ]
+        
+        list_y = buttons_y - button_height - button_spacing
+        self.list_box = ListBox(
+            self.get_database_entries(),
+            x=ui_start_x,
+            y=list_y - 300,  # Height of listbox
+            width=button_width * 2 + button_spacing,
+            height=300,
+            batch=self.static_batch
+        )
 
         self.text_cursor = self.get_system_mouse_cursor('text')
         self.focused_widget = None
@@ -232,25 +355,27 @@ class SimulationWindow(pyglet.window.Window):
         if hasattr(self, 'simulation'):
             self.simulation_paused = not self.simulation_paused
             if self.simulation_paused:
-                self.button_widgets[0].callback = self.dummy_button
-                print("lol")
                 self.time_paused = time.perf_counter()
                 self.renderer.store_paused_point(self.time_paused - self.start_time - self.elapsed_pause_time)
                 self.renderer.plot_torque()
-                time.sleep(10)
-                self.button_widgets[0].callback = self.toggle_simulation_pause
-                print("arrusshifef")
                 #self.plot_process = multiprocessing.Process(target=self.renderer.plot_torque)
                 #self.plot_process.start()
             else:
-                # If a Matplotlib window is still open, close it
-                #self.plot_process.terminate()
                 time_resumed = time.perf_counter()
                 self.elapsed_pause_time += time_resumed - self.time_paused
                 self.renderer.close_plot()
 
     def dummy_button(self):
         print("I'm going to kill myself")
+
+    def get_database_entries(self):
+        conn = sqlite3.connect('database.db')
+        cursor = conn.cursor()
+        cursor.execute('SELECT Time, IntegerValue, StringValue FROM engines')
+        entries = cursor.fetchall()
+        conn.close()
+        return [f"{e[2]} (Value: {e[1]}, Time: {e[0]:.2f})" for e in entries]
+
 
     def is_focused_widget_set(self):
         return self.focused_widget is not None
@@ -261,16 +386,29 @@ class SimulationWindow(pyglet.window.Window):
         widget.set_focus()
         self.focused_widget = widget
         
-    def on_mouse_motion(self, x, y, _dx, _dy):
+    def on_mouse_motion(self, x, y, dx, dy):
         for widget in self.widgets:
             if widget.is_mouseover(x, y):
                 self.set_mouse_cursor(self.text_cursor)
                 break
         else:
             self.set_mouse_cursor(None)
+            for button_widget in self.button_widgets:
+                button_widget.is_hover(x, y)
+        
+        self.list_box.on_mouse_motion(x, y, dx, dy)
+    
+    def on_mouse_scroll(self, x, y, scroll_x, scroll_y):
+        self.list_box.on_mouse_scroll(x, y, scroll_x, scroll_y)
 
     def on_mouse_press(self, x, y, button, modifiers):
         #if not hasattr(self, 'renderer'):
+        if button == pyglet.window.mouse.LEFT:
+            selected = self.list_box.on_mouse_press(x, y, button, modifiers)
+            if selected:
+                print(f"Selected: {selected}")
+                return
+            
             if button == pyglet.window.mouse.LEFT:
                 for button_widget in self.button_widgets:
                     if button_widget.is_mouseover(x, y):
