@@ -5,8 +5,8 @@ from linked_list import LinkedList
 from vector import Vector
 
 class Crank():
-    def __init__(self, radius_mm, mass): 
-        self.RADIUS = radius_mm / 1000
+    def __init__(self, radius, mass): 
+        self.RADIUS = radius
         self.MASS = mass
         self.MOMENT_OF_INTERTIA = self.MASS * self.RADIUS**2
         self.torque_history = LinkedList()
@@ -143,7 +143,7 @@ class Piston():
         contact_area = 2 * math.pi * self.RADIUS * self.contact_height
         friction_magnitude = visc * (self.velocity / film_thickness) * contact_area
 
-        return -math.copysign(friction_magnitude, self.velocity)
+        return math.copysign(friction_magnitude, self.velocity)
 
     def update(self, y_coordinate):
         self.position.y = y_coordinate
