@@ -62,17 +62,27 @@ class Renderer:
         self.plot_process = multiprocessing.Process(target=self.run_plot, args=(times, torques, paused_times))
         self.plot_process.start()
 
+    def plot_comparison_torque(self, times, torques, paused_points):
+        self.plot_process_comparison = multiprocessing.Process(target=self.run_plot, args=(times, torques, paused_points))
+        self.plot_process_comparison.start()
+
     @staticmethod
     def run_plot(times, torques, paused_points):
-        plt.plot(times, torques, color='lightblue')
-        plt.xlabel('Time (s)')
-        plt.ylabel('Torque (N·m)')
-        plt.title('Crank Torque')
-        for time in paused_points:
-            plt.axvline(x=time, color='r', linestyle='--', alpha=0.5)
-
-        plt.show()
+        fig, ax = plt.subplots(figsize=(10, 6))  # Use subplots to have a handle
+        ax.plot(times, torques, color='lightblue', linewidth=1, marker=None)
+        ax.set_xlabel('Time (s)')
+        ax.set_ylabel('Torque (N·m)')
+        ax.set_title('Crank Torque')
+        for time_point in paused_points:
+            ax.axvline(x=time_point, color='r', linestyle='--', alpha=0.5)
+        ax.grid(True, alpha=0.3)
+        plt.show(block=True)  # Blocks until the user manually closes the figure
+        plt.close(fig)        # Clean up resources after user closes
 
     def close_plot(self):
-        self.plot_process.terminate()
-        plt.close()
+        if hasattr(self, 'plot_process') and self.plot_process.is_alive():
+            self.plot_process.terminate()
+
+        if hasattr(self, 'plot_process_comparison') and self.plot_process_comparison.is_alive():
+            self.plot_process_comparison.terminate()
+        # Remove plt.close() call here since the figure closes properly in run_plot

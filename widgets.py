@@ -56,7 +56,6 @@ class ListBox:
     def __init__(self, items, x, y, width, height, batch):
         self.batch = batch
         self.items_data = items
-        self.rows = []
         self.x, self.y = x, y
         self.width, self.height = width, height
         self.scroll_offset = 0
@@ -68,8 +67,11 @@ class ListBox:
         self.update_table(items)
 
     def update_table(self, items):
+        self.rows = []
         for item in items:
-            self.rows.append(ListRow(item, self.x, 0, self.width, self.item_height, self.batch))
+            # Format the display string from tuple
+            display_text = f"{item[1]} - {item[2]}"  # timestamp - name
+            self.rows.append(ListRow(display_text, self.x, 0, self.width, self.item_height, self.batch))
         self.update_row_positions()
 
     def on_mouse_motion(self, x, y, _dx, _dy):

@@ -140,7 +140,7 @@ class SimulationWindow(pyglet.window.Window):
         ]
         
         list_y = buttons_y - button_height - button_spacing * 2
-        self.list_box = widgets.ListBox(self.get_database_entries(), x=ui_start_x, y=list_y - 200, 
+        self.list_box = widgets.ListBox(self.get_engine_design_entries(), x=ui_start_x, y=list_y - 200, 
                                         width=button_width * 2 + button_spacing, height=200, batch=self.static_batch)
 
         self.text_cursor = self.get_system_mouse_cursor('text')
@@ -169,7 +169,10 @@ class SimulationWindow(pyglet.window.Window):
 '''
     def store_graph(self, torque):
         current_time = time.perf_counter() - self.start_time - self.elapsed_pause_time
-        self.renderer.store_graph_point((current_time, torque))
+        # Only store points if enough time has passed (reduce sampling rate)
+        if not hasattr(self, 'last_store_time') or current_time - self.last_store_time >= 0.1:  # Store at 1000Hz
+            self.renderer.store_graph_point((current_time, torque))
+            self.last_store_time = current_time
 
     def save_parameters(self):
         if hasattr(self, 'simulation_parameters'): 
@@ -177,7 +180,7 @@ class SimulationWindow(pyglet.window.Window):
             if configuration_name:
                 conn = sqlite3.connect('database.db')
                 cursor = conn.cursor()
-                
+
                 if self.button_widgets[2].label.text == "Overwrite Parameters":
                     new_save_time = time.time()
                     cursor.execute('''
@@ -194,34 +197,125 @@ class SimulationWindow(pyglet.window.Window):
                         WHERE timestamp = ?
                     ''', (new_save_time, configuration_name, *self.simulation_parameters, self.save_time))
                     
-                    self.save_time = new_save_time
+                    # Clear old data for this design before inserting new points
+                    cursor.execute('DELETE FROM torque_time_data WHERE engine_design_id = ?', (self.save_id,))
+                    cursor.execute('DELETE FROM paused_points WHERE engine_design_id = ?', (self.save_id,))
+                    
+                    self.save_id = cursor.lastrowid
+                    self.save_torque_time_data(cursor, self.save_id)
+                    self.save_paused_points(cursor, self.save_id)
                     conn.commit()
                     conn.close()
+                    self.list_box.update_table(self.get_engine_design_entries())
                 else:
                     cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS engine_designs (
-                            timestamp REAL PRIMARY KEY,
-                            configuration_name TEXT,
-                            crank_radius REAL,
-                            crank_mass REAL,
-                            rod_length REAL,
-                            rod_mass REAL,
-                            piston_radius REAL,
-                            piston_mass REAL
+                    CREATE TABLE IF NOT EXISTS engine_designs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        timestamp REAL,
+                        configuration_name TEXT,
+                        crank_radius REAL,
+                        crank_mass REAL,
+                        rod_length REAL,
+                        rod_mass REAL,
+                        piston_radius REAL,
+                        piston_mass REAL
+                    )
+                    ''')
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS torque_time_data (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            engine_design_id INTEGER,
+                            time REAL,
+                            torque REAL,
+                            FOREIGN KEY(engine_design_id) REFERENCES engine_designs(id)
                         )
                     ''')
-                    
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS paused_points (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            engine_design_id INTEGER,
+                            paused_time REAL,
+                            FOREIGN KEY(engine_design_id) REFERENCES engine_designs(id)
+                        )
+                    ''')
+                
                     self.save_time = time.time()
                     cursor.execute('''
-                        INSERT INTO engine_designs 
+                        INSERT INTO engine_designs (timestamp, configuration_name, crank_radius, 
+                            crank_mass, rod_length, rod_mass, piston_radius, piston_mass)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (self.save_time, configuration_name, *self.simulation_parameters))
                     
+                    # Get the id of the inserted row
+                    self.save_id = cursor.lastrowid
+                    self.save_torque_time_data(cursor, self.save_id)
+                    self.save_paused_points(cursor, self.save_id)
                     conn.commit()
                     conn.close()
-                    self.list_box.update_table(self.get_database_entries())
-                    self.widgets[6].document.text = ""
                     self.button_widgets[2].label.text = "Overwrite Save"
+                
+                self.list_box.update_table(self.get_engine_design_entries())
+                self.widgets[6].document.text = ""
+
+    def save_torque_time_data(self, cursor, engine_design_id):
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_time ON torque_time_data(time)')
+        cursor.execute('PRAGMA floating_point_numbers=ON')
+        for time_point, torque_point in self.renderer.graph_points:
+            cursor.execute('''
+                INSERT INTO torque_time_data (engine_design_id, time, torque)
+                VALUES (?, ?, ?)
+            ''', (engine_design_id, round(time_point, 6), round(torque_point, 6)))
+
+    def save_paused_points(self, cursor, engine_design_id):
+        for paused_time in self.renderer.paused_points:
+            cursor.execute('''
+                INSERT INTO paused_points (engine_design_id, paused_time)
+                VALUES (?, ?)
+            ''', (engine_design_id, paused_time))
+
+    def get_engine_design_entries(self):
+        conn = sqlite3.connect('database.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='engine_designs'")
+        if cursor.fetchone() is not None:
+            cursor.execute('SELECT id, timestamp, configuration_name FROM engine_designs')
+            entries = cursor.fetchall()
+            conn.close()
+            return entries
+        else:
+            conn.close()
+            return []
+
+    def load_torque_time_data(self, engine_design_id):
+        conn = sqlite3.connect('database.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT time, torque FROM torque_time_data
+            WHERE engine_design_id = ?
+            ORDER BY time ASC
+        ''', (engine_design_id,))
+        data_points = cursor.fetchall()
+        conn.close()
+        return data_points
+
+    def load_paused_points(self, engine_design_id):
+        conn = sqlite3.connect('database.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT paused_time FROM paused_points
+            WHERE engine_design_id = ?
+            ORDER BY paused_time ASC
+        ''', (engine_design_id,))
+        paused_points = cursor.fetchall()
+        conn.close()
+        return [point[0] for point in paused_points]
+    
+    def load_plot(self, selected_record):
+        engine_design_id = selected_record[0]
+        data_points = self.load_torque_time_data(engine_design_id)
+        paused_points = self.load_paused_points(engine_design_id)
+        times, torques = zip(*data_points)
+        self.renderer.plot_comparison_torque(times, torques, paused_points)
 
     def start_simulation(self):
         parameters = [widget.document.text for widget in self.widgets[0:6]]
@@ -255,19 +349,6 @@ class SimulationWindow(pyglet.window.Window):
                 time_resumed = time.perf_counter()
                 self.elapsed_pause_time += time_resumed - self.time_paused
                 self.renderer.close_plot()
-
-    def get_database_entries(self):
-        conn = sqlite3.connect('database.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='engine_designs'")
-        if cursor.fetchone() is not None:
-            cursor.execute('SELECT configuration_name FROM engine_designs')
-            entries = cursor.fetchall()
-            conn.close()
-            return [entry[0] for entry in entries]
-        else:
-            conn.close()
-            return []
 
     def is_focused_widget_set(self):
         return self.focused_widget is not None
@@ -308,28 +389,27 @@ class SimulationWindow(pyglet.window.Window):
             selected = self.list_box.on_mouse_press(x, y, button, modifiers)
             if selected:
                 print(f"Selected: {selected}")
-                return
+                self.load_plot(selected)
             
-            if button == pyglet.window.mouse.LEFT:
-                for button_widget in self.button_widgets:
-                    if button_widget.is_mouseover(x, y):
-                        button_widget.on_click()
-                        return
+            for button_widget in self.button_widgets:
+                if button_widget.is_mouseover(x, y):
+                    button_widget.on_click()
+                    return
 
-                for widget in self.widgets:
-                    if widget.is_mouseover(x, y):
-                        if self.focused_widget == widget:
-                            break
-                        else:
-                            self.focus_widget(widget)
-                            break
-                else:
-                    if self.is_focused_widget_set():
-                        self.focused_widget.clear_focus()
-                        self.focused_widget = None
-
+            for widget in self.widgets:
+                if widget.is_mouseover(x, y):
+                    if self.focused_widget == widget:
+                        break
+                    else:
+                        self.focus_widget(widget)
+                        break
+            else:
                 if self.is_focused_widget_set():
-                    self.focused_widget.caret.on_mouse_press(x, y, button_widget, modifiers)
+                    self.focused_widget.clear_focus()
+                    self.focused_widget = None
+
+            if self.is_focused_widget_set():
+                self.focused_widget.caret.on_mouse_press(x, y, button_widget, modifiers)
 
     def on_mouse_drag(self, x, y, dx, dy, buttons, modifiers):
         if self.is_focused_widget_set():
@@ -377,7 +457,9 @@ class SimulationWindow(pyglet.window.Window):
 if __name__ == "__main__":
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
-    cursor.execute("DROP TABLE IF EXISTS engine_designs")
+    #cursor.execute("DROP TABLE IF EXISTS engine_designs")
+    #cursor.execute("DROP TABLE IF EXISTS torque_time_data")
+    #cursor.execute("DROP TABLE IF EXISTS paused_points")
     conn.commit()
     conn.close()
     simulation = SimulationWindow(width=1280, height=720, caption="Simulation", resizable = True, vsync=False)
