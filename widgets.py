@@ -25,16 +25,17 @@ class Button:
         self.callback()
 
 class ListRow:
-    def __init__(self, text, x, y, width, height, batch):
+    def __init__(self, text, x, y, width, height, batch, data=None):
         self.text = text
+        self.data = data  # Store the full row data
         self.visible = True
         self.label = pyglet.text.Label(text, x, y, anchor_x='left', anchor_y='center', 
                                        color=(0, 0, 0, 255), batch=batch)
         self.bounding_box = pyglet.shapes.Rectangle(x, y, width, height, color=(200, 200, 220), batch=batch)
+        self.focused = False  # Changed from True to False
 
     def is_mouseover(self, x, y):
-        if not self.visible:
-            return False
+        if not self.visible: return False
         
         is_within_horizontal_bounds = self.bounding_box.x < x < self.bounding_box.x + self.bounding_box.width
         is_within_vertical_bounds = self.bounding_box.y < y < self.bounding_box.y + self.bounding_box.height
@@ -42,15 +43,24 @@ class ListRow:
         return is_within_horizontal_bounds and is_within_vertical_bounds
     
     def set_hover(self, x, y):
-        if self.is_mouseover(x, y):
-            self.bounding_box.color = (150, 150, 170)
+        if self.focused:
+            self.bounding_box.color = (180, 180, 200)  # Lighter color for focus
+        elif self.is_mouseover(x, y):
+            self.bounding_box.color = (150, 150, 170)  # Darker hover color
         else:
-            self.bounding_box.color = (200, 200, 220)
+            self.bounding_box.color = (200, 200, 220)  # Original base color
     
     def set_visible(self, visible):
         self.visible = visible
         self.label.visible = visible
         self.bounding_box.visible = visible
+
+    def toggle_focus(self):
+        self.focused = not self.focused
+        if self.focused:
+            self.bounding_box.color = (180, 180, 200)  # Lighter color for focus
+        else:
+            self.bounding_box.color = (200, 200, 220)  # Original base color
 
 class ListBox:
     def __init__(self, items, x, y, width, height, batch):
@@ -63,33 +73,40 @@ class ListBox:
         self.padding = 20
         self.visible_count = height // self.item_height
         self.last_click_time = 0
-        self.last_clicked_row = None
+        self.focused_row = None
         self.update_table(items)
 
     def update_table(self, items):
+        self.focused_row = None
         self.rows = []
         for item in items:
-            # Format the display string from tuple
+            # Format the display string from tuple - timestamp is already in HH:MM:SS format
             display_text = f"{item[1]} - {item[2]}"  # timestamp - name
-            self.rows.append(ListRow(display_text, self.x, 0, self.width, self.item_height, self.batch))
+            row = ListRow(display_text, self.x, 0, self.width, self.item_height, self.batch, data=item)
+            self.rows.append(row)
         self.update_row_positions()
 
-    def on_mouse_motion(self, x, y, _dx, _dy):
+    def on_mouse_motion(self, x, y):
         for row in self.rows:
             row.set_hover(x, y)
 
-    def on_mouse_press(self, x, y, button, modifiers):
+    def on_mouse_press(self, x, y):
         for row in self.rows:
             if row.is_mouseover(x, y):
                 clicked_row = row
                 current_time = time.perf_counter()
-                if (clicked_row == self.last_clicked_row and current_time - self.last_click_time < 0.5):
+                if (clicked_row == self.focused_row and current_time - self.last_click_time < 0.5):
                     self.last_click_time = current_time
-                    self.last_clicked_row = None
-                    return row.text
+                    if self.focused_row:
+                        self.focused_row.toggle_focus()  # Unfocus the row
+                        self.focused_row = None
+                    return row.data
                 
                 self.last_click_time = current_time
-                self.last_clicked_row = row
+                if self.focused_row is not None: self.focused_row.toggle_focus()
+                self.focused_row = row
+                self.focused_row.toggle_focus()
+                return None
         return None
     
     def on_mouse_scroll(self, x, y, scroll_x, scroll_y):
@@ -121,6 +138,12 @@ class ListBox:
             row.label.x = self.x + self.padding
             row.label.y = row_y + self.item_height // 2
             current_y -= self.item_height
+
+    def get_focused_data(self):
+        if self.focused_row is not None:
+            return self.focused_row.data
+        else:
+            return None
      
 class TextBox:
     def __init__(self, label, x, y, width, batch):
