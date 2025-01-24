@@ -30,6 +30,9 @@ class Crank():
         angular_velocity_change = angular_momentum_change / self.MOMENT_OF_INTERTIA
         self.angular_velocity += angular_velocity_change
 
+        #if self.angular_velocity > 40:
+           # self.angular_velocity = 40
+
         rpm = self.angular_velocity * 60 / (2 * math.pi)
         print(rpm)
  
@@ -102,13 +105,15 @@ class Piston():
         self.ehd_constant = 1e-5
         self.ehd_exponent = 0.7
 
-        self.velocity = 0.0
+        self.velocity = 0
+        self.previous_velocity = 0
 
     def update_velocity(self, dt):
         # Piston movement in mm over dt, then convert to m/s
         dy = (self.position.y - self.last_position.y)
         self.velocity = dy / dt
         self.last_position.y = self.position.y
+        self.previous_velocity = self.velocity
 
     def calculate_viscosity(self, temperature):
         # Simple Arrhenius formula: eta = A * exp(B / T)
@@ -145,5 +150,6 @@ class Piston():
 
         return math.copysign(friction_magnitude, self.velocity)
 
-    def update(self, y_coordinate):
+    def update(self, y_coordinate, dt):
         self.position.y = y_coordinate
+        self.update_velocity(dt)
