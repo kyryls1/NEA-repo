@@ -1,6 +1,7 @@
 import pyglet
 import math
 from linked_list import LinkedList
+import matplotlib
 import matplotlib.pyplot as plt
 import multiprocessing
 
@@ -11,6 +12,7 @@ class Renderer:
         self.crank_radius = crank_radius
         self.rod_length = rod_length
         self.piston_radius = piston_radius
+        self.open_design_plots = {}
 
         self.axle = pyglet.shapes.Circle(x=origin.x, y=origin.y, radius=20, color=[201, 201, 201], batch=batch)
         self.crankarm = pyglet.shapes.Line(x=origin.x, y=origin.y, x2=origin.x, y2=origin.y + crank_radius, 
@@ -26,6 +28,7 @@ class Renderer:
         
         self.graph_points = LinkedList()
         self.paused_points = LinkedList()
+        matplotlib.use('TkAgg')
                                                   
     def render(self, crank, rod, piston):
         crank_x = self.origin.x
@@ -48,41 +51,98 @@ class Renderer:
         self.piston.x = crank_x - piston.RADIUS
         self.piston.y = crank_y + piston.position.y
 
-    def store_graph_point(self, point):
-        self.graph_points.append(point)
+    def store_graph_point(self, current_time, torque, angular_velocity):
+        self.graph_points.append((current_time, torque, angular_velocity))
 
     def store_paused_point(self, time):
         self.paused_points.append(time)
 
-    def plot_torque(self):
-        times = [t[0] for t in self.graph_points]
-        torques = [t[1] for t in self.graph_points]
+    def plot_torque(self, simulation_parameters):
+        times, torques, angular_velocities = zip(*self.graph_points)
         paused_times = list(self.paused_points)
 
-        self.plot_process = multiprocessing.Process(target=self.run_plot, args=(times, torques, paused_times))
+        self.plot_process = multiprocessing.Process(
+            target=self.run_plot_performance, 
+            args=(times, torques, angular_velocities, paused_times, simulation_parameters)
+        )
         self.plot_process.start()
 
-    def plot_comparison_torque(self, times, torques, paused_points):
-        self.plot_process_comparison = multiprocessing.Process(target=self.run_plot, args=(times, torques, paused_points))
-        self.plot_process_comparison.start()
+    def plot_performance_comparison(self, times, torques, angular_velocities, paused_points, engine_design_id=None, simulation_parameters=None):
+        if engine_design_id in self.open_design_plots:
+            if self.open_design_plots[engine_design_id].is_alive():
+                print(f"Plot for engine design {engine_design_id} is already running")
+                return
+            else:
+                del self.open_design_plots[engine_design_id]
+
+        plot_process_comparison = multiprocessing.Process(
+            target=self.run_plot_performance, 
+            args=(times, torques, angular_velocities, paused_points, simulation_parameters)
+        )
+        self.open_design_plots[engine_design_id] = plot_process_comparison
+        plot_process_comparison.start()
 
     @staticmethod
-    def run_plot(times, torques, paused_points):
-        fig, ax = plt.subplots(figsize=(10, 6))  # Use subplots to have a handle
-        ax.plot(times, torques, color='lightblue', linewidth=1, marker=None)
-        ax.set_xlabel('Time (s)')
-        ax.set_ylabel('Torque (N·m)')
-        ax.set_title('Crank Torque')
+    def run_plot_performance(times, torques, angular_velocities, paused_points, parameters):
+        # Create figure with reduced height for parameter text
+        fig, (ax_text, ax1, ax2) = plt.subplots(3, 1, figsize=(10, 8), gridspec_kw={'height_ratios': [0.15, 1, 1]})
+        fig.canvas.manager.set_window_title(parameters[0])
+        
+        # Hide the ax_text axes
+        ax_text.axis('off')
+        
+        # Format the simulation parameters with reduced font size and center alignment
+        param_text = (
+            f"Simulation Parameters\n"
+            f"----------------------------------------\n"
+            f"Crank:\n  Radius = {parameters[1]} m\n  Mass = {parameters[2]} kg\n"
+            f"Rod:\n  Length = {parameters[3]} m\n  Mass = {parameters[4]} kg\n"
+            f"Piston:\n  Radius = {parameters[5]} m\n  Mass = {parameters[6]} kg"
+        )
+        
+        # Add parameters text with a semi-transparent background box
+        ax_text.text(
+            0.5, 0.5, param_text,
+            transform=ax_text.transAxes,
+            family='monospace',
+            fontsize=10,
+            verticalalignment='center',
+            horizontalalignment='center',
+            bbox=dict(facecolor='white', alpha=0.7, boxstyle='round,pad=0.5')
+        )
+        
+        # Plot torque
+        ax1.plot(times, torques, color='lightblue', linewidth=1)
+        ax1.set_ylabel('Torque (N·m)')
+        ax1.set_title('Crank Torque')
+        ax1.grid(True, alpha=0.3)
+        
+        # Plot angular velocity
+        ax2.plot(times, angular_velocities, color='orange', linewidth=1)
+        ax2.set_xlabel('Time (s)')
+        ax2.set_ylabel('Angular Velocity (rad/s)')
+        ax2.set_title('Angular Velocity')
+        ax2.grid(True, alpha=0.3)
+        
+        # Add paused time indicators to both plots
         for time_point in paused_points:
-            ax.axvline(x=time_point, color='r', linestyle='--', alpha=0.5)
-        ax.grid(True, alpha=0.3)
-        plt.show(block=True)  # Blocks until the user manually closes the figure
-        plt.close(fig)        # Clean up resources after user closes
+            ax1.axvline(x=time_point, color='r', linestyle='--', alpha=0.5)
+            ax2.axvline(x=time_point, color='r', linestyle='--', alpha=0.5)
+        
+        plt.tight_layout(pad=2)  # Adjust spacing between subplots to reduce overall height
+        plt.show()
+        plt.close(fig) 
 
     def close_plot(self):
         if hasattr(self, 'plot_process') and self.plot_process.is_alive():
             self.plot_process.terminate()
+            self.plot_process.join()
 
-        if hasattr(self, 'plot_process_comparison') and self.plot_process_comparison.is_alive():
-            self.plot_process_comparison.terminate()
-        # Remove plt.close() call here since the figure closes properly in run_plot
+    def close_comparison_plot(self, engine_design_id):
+        if engine_design_id in self.open_design_plots:
+            process = self.open_design_plots[engine_design_id]
+            if process.is_alive():
+                process.terminate()
+                process.join()
+                print(f"Terminated plot for engine design {engine_design_id}")
+            del self.open_design_plots[engine_design_id]

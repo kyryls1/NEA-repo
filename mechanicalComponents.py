@@ -29,6 +29,7 @@ class Crank():
         angular_momentum_change = torque * dt
         angular_velocity_change = angular_momentum_change / self.MOMENT_OF_INTERTIA
         self.angular_velocity += angular_velocity_change
+        print(self.angular_velocity)
 
         if self.angular_velocity > 300:
             self.angular_velocity = 300

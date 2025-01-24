@@ -25,11 +25,10 @@ class Button:
         self.callback()
 
 class ListRow:
-    def __init__(self, text, x, y, width, height, batch, data=None):
-        self.text = text
-        self.data = data  # Store the full row data
+    def __init__(self, data, x, y, width, height, batch):
+        self.data = data
         self.visible = True
-        self.label = pyglet.text.Label(text, x, y, anchor_x='left', anchor_y='center', 
+        self.label = pyglet.text.Label(str(self.data[1]), x, y, anchor_x='left', anchor_y='center', 
                                        color=(0, 0, 0, 255), batch=batch)
         self.bounding_box = pyglet.shapes.Rectangle(x, y, width, height, color=(200, 200, 220), batch=batch)
         self.focused = False  # Changed from True to False
@@ -79,11 +78,17 @@ class ListBox:
     def update_table(self, items):
         self.focused_row = None
         self.rows = []
+        if items is None:
+            print("Error: No data received from database.")
+            return
+        
         for item in items:
-            # Format the display string from tuple - timestamp is already in HH:MM:SS format
-            display_text = f"{item[1]} - {item[2]}"  # timestamp - name
-            row = ListRow(display_text, self.x, 0, self.width, self.item_height, self.batch, data=item)
-            self.rows.append(row)
+            if isinstance(item, (list, tuple)) and len(item) > 1:  # Ensure item is sequence with at least 2 elements
+                row = ListRow(item, self.x, 0, self.width, self.item_height, self.batch)
+                self.rows.append(row)
+            else:
+                print(f"Warning: Skipping invalid record format: {item}")
+            
         self.update_row_positions()
 
     def on_mouse_motion(self, x, y):
