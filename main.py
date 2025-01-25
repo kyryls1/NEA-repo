@@ -71,7 +71,7 @@ class Simulation():
         force_tangent_to_crank = self.transfer_force_to_crank(force_parallel_to_rod, rod_direction_vector)
 
         #temperature = self.gas_simulation.get_temperature(self.crank.angle_radians)
-        friction_force = self.calculate_friction(dt)
+        friction_force = self.calculate_friction()
 
         net_force_tangent = force_tangent_to_crank + friction_force
 
@@ -79,23 +79,31 @@ class Simulation():
         self.connector_rod.update(self.crank.calculate_delta_theta(dt))
         self.piston.update(self.connector_rod.rod_end.y, dt)
 
+    def calculate_velocity_gradient(self, velocity, film_thickness):
+        return -8 * velocity / film_thickness
+        '''
     def calculate_acceleration_gradient(self, velocity, previous_velocity, previous_acceleration, dt):
         acceleration = (velocity - previous_velocity) / dt
         acceleration_gradient = (acceleration - previous_acceleration) / dt
         return acceleration_gradient
+        '''        
+    def calculate_pressure_gradient(self, dynamic_viscosity, film_thickness):
+        velocity_gradient = self.calculate_velocity_gradient(self.piston.velocity, film_thickness)
+        return dynamic_viscosity * velocity_gradient
 
-    def calculate_pressure_gradient(self, dynamic_viscosity, dt):
-         # placeholder
-        acceleration_gradient = self.calculate_acceleration_gradient(self.piston.velocity, self.piston.previous_velocity, self.previous_piston_acceleration, dt)
-        return dynamic_viscosity * acceleration_gradient
-        
-    def calculate_friction(self, dt):
+    def calculate_friction(self):
         film_thickness = 1e-6 # placeholder
         dynamic_viscosity = 0.001
-        pressure_gradient = self.calculate_pressure_gradient(dynamic_viscosity, dt)
+        pressure_gradient = self.calculate_pressure_gradient(dynamic_viscosity, film_thickness)
         shear_stress = 0.5 * film_thickness * pressure_gradient + dynamic_viscosity * self.piston.velocity / film_thickness
         piston_area = math.pi * self.piston.RADIUS**2 * 10 # 10 is a placeholder for the piston height
-        return shear_stress * piston_area
+        total_friction = shear_stress * piston_area
+
+        # stupid fucking copilot ideas stg man this guy needs to kill himself
+        #damping_coefficient = 1.8  # Increased damping
+        #velocity_squared_term = damping_coefficient * self.piston.velocity * abs(self.piston.velocity)
+        #total_friction = base_friction + velocity_squared_term
+        return total_friction
 
     def find_normal_to_crank_motion(self, theta):
         if theta == math.pi/2:
