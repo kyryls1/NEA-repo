@@ -61,23 +61,25 @@ class Simulation():
         self.gas_simulation = GasSimulation()
 
         self.component_weight = (rod_mass + piston_mass) * 9.81
-        self.previous_piston_acceleration = 0
  
     def update_all(self, dt):
         gas_force = self.gas_simulation.calculate_force(self.crank.angle_radians, dt)
-        total_force = gas_force + self.component_weight
+        friction_force = self.calculate_friction()
+        total_force = gas_force + self.component_weight + friction_force
         rod_direction_vector = self.find_rod_direction_vector()
         force_parallel_to_rod = self.transfer_force_to_rod(total_force, rod_direction_vector)
         force_tangent_to_crank = self.transfer_force_to_crank(force_parallel_to_rod, rod_direction_vector)
 
         #temperature = self.gas_simulation.get_temperature(self.crank.angle_radians)
-        friction_force = self.calculate_friction()
 
-        net_force_tangent = force_tangent_to_crank + friction_force
-
-        self.crank.update(net_force_tangent, dt)
+        self.crank.update(force_tangent_to_crank, dt)
         self.connector_rod.update(self.crank.calculate_delta_theta(dt))
         self.piston.update(self.connector_rod.rod_end.y, dt)
+        
+        # Calculate current RPM
+
+        #if self.crank.rpm > 6000 and self.crank.rpm < 7000:
+        #    self.crank.angular_velocity = 3000
 
     def calculate_velocity_gradient(self, velocity, film_thickness):
         return -8 * velocity / film_thickness
@@ -92,17 +94,13 @@ class Simulation():
         return dynamic_viscosity * velocity_gradient
 
     def calculate_friction(self):
-        film_thickness = 1e-6 # placeholder
+        film_thickness = 3e-6 # placeholder
         dynamic_viscosity = 0.001
         pressure_gradient = self.calculate_pressure_gradient(dynamic_viscosity, film_thickness)
         shear_stress = 0.5 * film_thickness * pressure_gradient + dynamic_viscosity * self.piston.velocity / film_thickness
         piston_area = math.pi * self.piston.RADIUS**2 * 10 # 10 is a placeholder for the piston height
         total_friction = shear_stress * piston_area
 
-        # stupid fucking copilot ideas stg man this guy needs to kill himself
-        #damping_coefficient = 1.8  # Increased damping
-        #velocity_squared_term = damping_coefficient * self.piston.velocity * abs(self.piston.velocity)
-        #total_friction = base_friction + velocity_squared_term
         return total_friction
 
     def find_normal_to_crank_motion(self, theta):
@@ -136,15 +134,14 @@ class SimulationWindow(pyglet.window.Window):
         self.static_batch = pyglet.graphics.Batch()
         self.simulation_paused = True
         self.fps_display = pyglet.window.FPSDisplay(self)
+        self.simulation_speed_factor = 0.1  # 50x slower
 
-        #self.pool = multiprocessing.Pool()
-        #self.simulation_update_count = 0
 
         self.origin = Vector(300, 200)
-        simulation_area_width = 700  # Width allocated for simulation on the left
-        ui_start_x = simulation_area_width + 50  # Starting X position for UI elements
-        ui_start_y = 650  # Starting Y position for the topmost UI element
-        ui_spacing = 50  # Vertical spacing between UI elements
+        simulation_area_width = 700
+        ui_start_x = simulation_area_width + 50
+        ui_start_y = 650
+        ui_spacing = 50
         textbox_width = 70
 
         self.widgets = [
@@ -158,8 +155,8 @@ class SimulationWindow(pyglet.window.Window):
         ]
 
         buttons_y = ui_start_y - 7 * ui_spacing - 20
-        button_width = 180  # Width for buttons
-        button_height = 50  # Height for buttons
+        button_width = 180
+        button_height = 50
         button_spacing = 20
         self.button_widgets = [
             widgets.Button("Pause/Unpause", ui_start_x, buttons_y, button_width, button_height, 
@@ -186,10 +183,12 @@ class SimulationWindow(pyglet.window.Window):
 
     def update_simulation(self, dt):
         if not self.simulation_paused:
-            self.simulation.update_all(dt)
-            self.store_graph(self.simulation.crank.instantenous_torque)
+            scaled_dt = dt * self.simulation_speed_factor
+            self.simulation.update_all(scaled_dt)
+            # store "displayed_time" as real_time / speed_factor
+            displayed_time = (time.perf_counter() - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor
+            self.store_graph(self.simulation.crank.instantenous_torque, displayed_time)
             self.renderer.render(self.simulation.crank, self.simulation.connector_rod, self.simulation.piston)
-            #self.simulation_update_count += 1
         '''
         current_time = time.time()
 
@@ -198,9 +197,8 @@ class SimulationWindow(pyglet.window.Window):
             self.simulation_update_count = 0 
             self.last_update_time = current_time
 '''
-    def store_graph(self, torque):
-        current_time = time.perf_counter() - self.start_time - self.elapsed_pause_time
-        self.renderer.store_graph_point((current_time, torque))
+    def store_graph(self, torque, displayed_time):
+        self.renderer.store_graph_point((displayed_time, torque))
 
     def save_parameters(self):
         if hasattr(self, 'simulation_parameters'): 
@@ -283,7 +281,8 @@ class SimulationWindow(pyglet.window.Window):
             self.simulation_paused = not self.simulation_paused
             if self.simulation_paused:
                 self.time_paused = time.perf_counter()
-                self.renderer.store_paused_point(self.time_paused - self.start_time - self.elapsed_pause_time)
+                paused_display_time = (self.time_paused - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor
+                self.renderer.store_paused_point(paused_display_time)
                 self.renderer.plot_torque()
                 #self.plot_process = multiprocessing.Process(target=self.renderer.plot_torque)
                 #self.plot_process.start()

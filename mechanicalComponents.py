@@ -11,9 +11,29 @@ class Crank():
         self.MOMENT_OF_INTERTIA = self.MASS * self.RADIUS**2
         self.torque_history = LinkedList()
 
-        self.angular_velocity = 2 # fix to start properly later, but have this here so the engine actually starts
+        self.angular_velocity = 5 # fix to start properly later, but have this here so the engine actually starts
         self.angle_radians = 0
         self.instantenous_torque = 0
+        self.torque_sum = 0
+        self.sample_count = 0
+        self.time_accumulator = 0
+        
+        # New power rating attributes
+        self.stored_energy = 0
+        self.sustained_power_rating = 0
+        self.peak_power = 0
+        self.power_history = []  # Store recent power values
+        self.power_window = 10   # Number of samples to average
+
+        # Power rating attributes following SAE J1349
+        self.continuous_power = 0    # Power that can be maintained indefinitely
+        self.intermittent_power = 0  # Power available for short periods
+        self.power_samples = []      # Store last 30 seconds of power data
+        self.min_samples_required = 100  # Minimum samples before calculating ratings
+        self.sample_interval = 0.1   # Sample every 0.1 seconds
+        self.averaging_window = 300   # 30 seconds / 0.1s = 300 samples
+        self.time_at_power = 0       # Time spent at current power level
+        self.power_threshold = 0.85  # Reduced threshold to 85% for more realistic ratings
  
     def calculate_torque(self, force):
         return force * (self.RADIUS)
@@ -33,13 +53,55 @@ class Crank():
         #if self.angular_velocity > 40:
            # self.angular_velocity = 40
 
-        rpm = self.angular_velocity * 60 / (2 * math.pi)
-        print(rpm)
+        self.rpm = self.angular_velocity * 60 / (2 * math.pi)
+        #print(self.rpm)
  
+    def calculate_stored_energy(self):
+        return 0.5 * self.MOMENT_OF_INTERTIA * self.angular_velocity**2
+
+    def calculate_available_power(self, time_window):
+        # Maximum power available considering stored energy
+        energy_available = self.stored_energy * 0.8  # Leave 20% for stability
+        return energy_available / time_window
+
+    def update_power_ratings(self, instantaneous_power, dt):
+        self.power_samples.append(instantaneous_power)
+        if len(self.power_samples) > self.averaging_window:
+            self.power_samples.pop(0)
+        
+        # Only calculate ratings once we have enough samples
+        if len(self.power_samples) >= self.min_samples_required:
+            # Calculate running average power
+            average_power = sum(self.power_samples) / len(self.power_samples)
+            
+            # Update continuous power (based on 30-second moving average)
+            self.continuous_power = average_power
+            
+            # Update intermittent power (highest 5-second average)
+            short_term_window = int(5.0 / (dt * 10))  # Convert 5 seconds to sample count
+            if len(self.power_samples) >= short_term_window:
+                recent_average = sum(self.power_samples[-short_term_window:]) / short_term_window
+                self.intermittent_power = max(self.intermittent_power, recent_average)
+
     def update(self, force, dt):
         self.instantenous_torque = self.calculate_torque(force)
         self.update_angular_velocity(self.instantenous_torque, dt)
-        self.update_angle(self.calculate_delta_theta(dt))
+        delta_theta = self.calculate_delta_theta(dt)
+        self.update_angle(delta_theta)
+        
+        # Calculate power metrics
+        instantaneous_power = self.instantenous_torque * self.angular_velocity
+        stored_energy = self.calculate_stored_energy()
+        self.update_power_ratings(instantaneous_power, dt)
+        
+        # Print ratings every 0.1 seconds
+        self.time_accumulator += dt
+        if self.time_accumulator >= 0.1:
+            if self.continuous_power > 0:
+                print(f"Continuous Power Rating: {self.continuous_power:.2f} W")
+                print(f"Intermittent Power Rating: {self.intermittent_power:.2f} W")
+                print(f"Stored Energy: {stored_energy:.2f} J")
+            self.time_accumulator = 0
 
 class ConnectorRod():
     def __init__(self, mass, length, crank_radius_offset):       
