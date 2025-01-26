@@ -137,7 +137,7 @@ class SimulationWindow(pyglet.window.Window):
         self.simulation_paused = True
         self.last_save_id = None
         self.fps_display = pyglet.window.FPSDisplay(self)
-        self.simulation_speed_factor = 0.1  # 50x slower
+        self.simulation_speed_factor = 0.02  # 50x slower
 
 
         self.origin = Vector(300, 200)
@@ -223,7 +223,7 @@ class SimulationWindow(pyglet.window.Window):
                     self.button_widgets[2].label.text = "Overwrite Parameters"
                 
                 # Save new record
-                self.save_configuration(cursor, configuration_name, *self.simulation_parameters)
+                self.save_configuration(cursor, configuration_name, *self.renderer_parameters)
                 self.last_save_id = cursor.lastrowid
                 self.save_engine_performance_data(cursor, self.last_save_id)
                 self.save_paused_points(cursor, self.last_save_id)
@@ -365,7 +365,7 @@ class SimulationWindow(pyglet.window.Window):
             print("Connector Rod Length cannot be smaller than Crank Radius")
             return
             
-        self.simulation_parameters = list(map(float, parameters))
+        self.renderer_parameters = list(map(float, parameters))
         self.renderer.close_plot()
             
         self.simulation_batch = pyglet.graphics.Batch()
@@ -389,7 +389,7 @@ class SimulationWindow(pyglet.window.Window):
                 self.time_paused = time.perf_counter()
                 self.renderer.store_paused_point((self.time_paused - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor)
                 self.renderer.close_plot()
-                named_parameters = self.simulation_parameters.copy()
+                named_parameters = self.renderer_parameters.copy()
                 named_parameters.insert(0, "Active Configuration")
                 self.renderer.plot_torque(named_parameters)
                 #self.plot_process = multiprocessing.Process(target=self.renderer.plot_torque)

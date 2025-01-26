@@ -91,9 +91,9 @@ class Renderer:
         param_text = (
             f"Simulation Parameters\n"
             f"----------------------------------------\n"
-            f"Crank:\n  Radius = {parameters[1]} m\n  Mass = {parameters[2]} kg\n"
-            f"Rod:\n  Length = {parameters[3]} m\n  Mass = {parameters[4]} kg\n"
-            f"Piston:\n  Radius = {parameters[5]} m\n  Mass = {parameters[6]} kg"
+            f"Crank:\n  Radius = {parameters[1]} mm  Mass = {parameters[2]} kg\n"
+            f"Rod:\n  Length = {parameters[3]} mm  Mass = {parameters[4]} kg\n"
+            f"Piston:\n  Radius = {parameters[5]} mm  Mass = {parameters[6]} kg"
         )
         
         # Add parameters text with a semi-transparent background box
