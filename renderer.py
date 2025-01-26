@@ -6,50 +6,46 @@ import matplotlib.pyplot as plt
 import multiprocessing
 
 class Renderer:
-    def __init__(self, batch, origin, crank_radius, rod_length, piston_radius):
+    def __init__(self, batch, origin, crank_radius_mm, rod_length_mm, piston_radius_mm):
         self.batch = batch
         self.origin = origin
-        self.crank_radius = crank_radius
-        self.rod_length = rod_length
-        self.piston_radius = piston_radius
+        self.crank_radius = crank_radius_mm
+        self.rod_length = rod_length_mm
+        self.piston_radius = piston_radius_mm
         self.open_design_plots = {}
 
         self.axle = pyglet.shapes.Circle(x=origin.x, y=origin.y, radius=20, color=[201, 201, 201], batch=batch)
-        self.crankarm = pyglet.shapes.Line(x=origin.x, y=origin.y, x2=origin.x, y2=origin.y + crank_radius, 
+        self.crankarm = pyglet.shapes.Line(x=origin.x, y=origin.y, x2=origin.x, y2=origin.y + crank_radius_mm, 
                                            thickness=40, color=[255, 255, 255], batch=batch)
-        self.crank_bearing = pyglet.shapes.Circle(x=origin.x, y=origin.y + crank_radius, 
+        self.crank_bearing = pyglet.shapes.Circle(x=origin.x, y=origin.y + crank_radius_mm, 
                                                   radius=20, color=[255, 255, 255], batch=batch)        
-        self.piston = pyglet.shapes.Rectangle(x=origin.x - piston_radius, y=origin.y + crank_radius + rod_length, 
-                                              width=piston_radius * 2, height=150, color=[255, 255, 255], batch=batch)
-        self.piston_bearing = pyglet.shapes.Circle(x=origin.x, y=origin.y + crank_radius + rod_length, 
+        self.piston = pyglet.shapes.Rectangle(x=origin.x - piston_radius_mm, y=origin.y + crank_radius_mm + rod_length_mm, 
+                                              width=piston_radius_mm * 2, height=150, color=[255, 255, 255], batch=batch)
+        self.piston_bearing = pyglet.shapes.Circle(x=origin.x, y=origin.y + crank_radius_mm + rod_length_mm, 
                                                    radius=15, color=[201, 201, 201], batch=batch)
-        self.rod = pyglet.shapes.Line(x=origin.x, y=origin.y + crank_radius, x2=origin.x, 
-                                      y2=origin.y + crank_radius + rod_length, thickness=15, color=[201, 201, 201], batch=batch)
+        self.rod = pyglet.shapes.Line(x=origin.x, y=origin.y + crank_radius_mm, x2=origin.x, 
+                                      y2=origin.y + crank_radius_mm + rod_length_mm, thickness=15, color=[201, 201, 201], batch=batch)
         
         self.graph_points = LinkedList()
         self.paused_points = LinkedList()
         matplotlib.use('TkAgg')
                                                   
     def render(self, crank, rod, piston):
-        crank_x = self.origin.x
-        crank_y = self.origin.y
-
         angle_degrees = math.degrees(crank.angle_radians)
         self.crankarm.rotation = angle_degrees
         self.axle.rotation = angle_degrees
 
-        self.rod.x = crank_x + rod.rod_start.x
-        self.rod.y = crank_y + rod.rod_start.y
-        self.rod.x2 = crank_x + rod.rod_end.x
-        self.rod.y2 = crank_y + rod.rod_end.y
+        self.rod.x = self.origin.x + rod.rod_start.x * 1000.0
+        self.rod.y = self.origin.y + rod.rod_start.y * 1000.0
+        self.rod.x2 = self.origin.x + rod.rod_end.x * 1000.0
+        self.rod.y2 = self.origin.y + rod.rod_end.y * 1000.0
 
         self.crank_bearing.x = self.rod.x
         self.crank_bearing.y = self.rod.y
         self.piston_bearing.x = self.rod.x2
         self.piston_bearing.y = self.rod.y2
 
-        self.piston.x = crank_x - piston.RADIUS
-        self.piston.y = crank_y + piston.position.y
+        self.piston.y = self.origin.y + piston.position.y * 1000
 
     def store_graph_point(self, current_time, torque, angular_velocity):
         self.graph_points.append((current_time, torque, angular_velocity))
