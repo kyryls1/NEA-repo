@@ -94,11 +94,11 @@ class Simulation():
         return dynamic_viscosity * velocity_gradient
 
     def calculate_friction(self):
-        film_thickness = 3e-6 # placeholder
-        dynamic_viscosity = 0.001
+        film_thickness = 1e-6 # placeholder
+        dynamic_viscosity = 0.01
         pressure_gradient = self.calculate_pressure_gradient(dynamic_viscosity, film_thickness)
         shear_stress = 0.5 * film_thickness * pressure_gradient + dynamic_viscosity * self.piston.velocity / film_thickness
-        piston_area = math.pi * self.piston.RADIUS**2 * 10 # 10 is a placeholder for the piston height
+        piston_area = math.pi * self.piston.RADIUS**2 * 0.1 # what absolute retard made the height 10m
         total_friction = shear_stress * piston_area
 
         return total_friction
