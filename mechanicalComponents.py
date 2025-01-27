@@ -30,13 +30,16 @@ class Crank():
         angular_velocity_change = angular_momentum_change / self.MOMENT_OF_INTERTIA
         self.angular_velocity += angular_velocity_change
 
-        rpm = self.angular_velocity * 60 / (2 * math.pi)
-        print(rpm)
+        #rpm = self.angular_velocity * 60 / (2 * math.pi)
+        #print(rpm)
  
     def update(self, force, dt):
         self.instantenous_torque = self.calculate_torque(force)
         self.update_angular_velocity(self.instantenous_torque, dt)
         self.update_angle(self.calculate_delta_theta(dt))
+
+    def get_rpm(self):
+        return self.angular_velocity * 60 / (2 * math.pi)
 
 class ConnectorRod():
     def __init__(self, mass, length, crank_radius_offset):       
@@ -73,28 +76,19 @@ class ConnectorRod():
         self.update_piston_anchor_position()
 
 class Piston():
-    def __init__(self, mass, radius, rod_offset):
+    def __init__(self, mass, radius, length, deck_clearance, rod_offset,):
         self.RADIUS = radius
         self.MASS = mass
+        self.LENGTH = length
+        self.DECK_CLEARANCE = deck_clearance
         self.position = Vector(0, rod_offset)
-        # Store last position to compute velocity via position delta
         self.last_position = Vector(0, rod_offset)
-
-        # Arrhenius-type viscosity constants (approx. for engine oil)
-        self.visc_A = 0.015    # Pa·s coefficient
-        self.visc_B = 2000     # exponent coefficient
-
-        self.contact_height = 0.1  # m
-        self.ambient_pressure = 1e5
-
-        self.ehd_constant = 1e-5
-        self.ehd_exponent = 0.7
 
         self.velocity = 0
         self.previous_velocity = 0
+        self.surface_area = 2 * math.pi * self.RADIUS * self.LENGTH
 
     def update_velocity(self, dt):
-        # Piston movement in mm over dt, then convert to m/s
         dy = (self.position.y - self.last_position.y)
         self.velocity = dy / dt
         self.last_position.y = self.position.y

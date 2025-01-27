@@ -6,12 +6,13 @@ import matplotlib.pyplot as plt
 import multiprocessing
 
 class Renderer:
-    def __init__(self, batch, origin, crank_radius_mm, rod_length_mm, piston_radius_mm):
+    def __init__(self, batch, origin, crank_radius_mm, rod_length_mm, piston_radius_mm, piston_length_mm):
         self.batch = batch
         self.origin = origin
         self.crank_radius = crank_radius_mm
         self.rod_length = rod_length_mm
         self.piston_radius = piston_radius_mm
+        self.piston_length = piston_length_mm
         self.open_design_plots = {}
 
         self.axle = pyglet.shapes.Circle(x=origin.x, y=origin.y, radius=20, color=[201, 201, 201], batch=batch)
@@ -19,8 +20,12 @@ class Renderer:
                                            thickness=40, color=[255, 255, 255], batch=batch)
         self.crank_bearing = pyglet.shapes.Circle(x=origin.x, y=origin.y + crank_radius_mm, 
                                                   radius=20, color=[255, 255, 255], batch=batch)        
-        self.piston = pyglet.shapes.Rectangle(x=origin.x - piston_radius_mm, y=origin.y + crank_radius_mm + rod_length_mm, 
-                                              width=piston_radius_mm * 2, height=150, color=[255, 255, 255], batch=batch)
+        self.piston = pyglet.shapes.Rectangle(x=origin.x - piston_radius_mm, 
+                                              y=origin.y + crank_radius_mm + rod_length_mm, 
+                                              width=piston_radius_mm * 2, 
+                                              height=piston_length_mm, 
+                                              color=[255, 255, 255], 
+                                              batch=batch)
         self.piston_bearing = pyglet.shapes.Circle(x=origin.x, y=origin.y + crank_radius_mm + rod_length_mm, 
                                                    radius=15, color=[201, 201, 201], batch=batch)
         self.rod = pyglet.shapes.Line(x=origin.x, y=origin.y + crank_radius_mm, x2=origin.x, 
@@ -28,6 +33,7 @@ class Renderer:
         
         self.graph_points = LinkedList()
         self.paused_points = LinkedList()
+        self.throttle_change_points = LinkedList()  # New list for fuel changes
         matplotlib.use('TkAgg')
                                                   
     def render(self, crank, rod, piston):
@@ -53,33 +59,32 @@ class Renderer:
     def store_paused_point(self, time):
         self.paused_points.append(time)
 
-    def plot_torque(self, simulation_parameters):
+    def store_throttle_change_point(self, time, new_fuel_flow_rate):
+        self.throttle_change_points.append((time, new_fuel_flow_rate))
+
+    def plot_active_configuration(self, parameters):
         times, torques, angular_velocities = zip(*self.graph_points)
-        paused_times = list(self.paused_points)
+        paused_points = list(self.paused_points)
+        throttle_changes = list(self.throttle_change_points)
+        self.plot_performance(times, torques, angular_velocities, paused_points, throttle_changes, parameters)
 
-        self.plot_process = multiprocessing.Process(
-            target=self.run_plot_performance, 
-            args=(times, torques, angular_velocities, paused_times, simulation_parameters)
-        )
-        self.plot_process.start()
-
-    def plot_performance_comparison(self, times, torques, angular_velocities, paused_points, engine_design_id=None, simulation_parameters=None):
+    def plot_performance(self, times, torques, angular_velocities, paused_points, throttle_changes, simulation_parameters, engine_design_id=0):
         if engine_design_id in self.open_design_plots:
             if self.open_design_plots[engine_design_id].is_alive():
                 print(f"Plot for engine design {engine_design_id} is already running")
                 return
             else:
                 del self.open_design_plots[engine_design_id]
-
+        
         plot_process_comparison = multiprocessing.Process(
-            target=self.run_plot_performance, 
-            args=(times, torques, angular_velocities, paused_points, simulation_parameters)
+            target=self.run_plot, 
+            args=(times, torques, angular_velocities, paused_points, throttle_changes, simulation_parameters)
         )
         self.open_design_plots[engine_design_id] = plot_process_comparison
         plot_process_comparison.start()
 
     @staticmethod
-    def run_plot_performance(times, torques, angular_velocities, paused_points, parameters):
+    def run_plot(times, torques, rpms, paused_points, throttle_changes, parameters):
         # Create figure with reduced height for parameter text
         fig, (ax_text, ax1, ax2) = plt.subplots(3, 1, figsize=(10, 8), gridspec_kw={'height_ratios': [0.15, 1, 1]})
         fig.canvas.manager.set_window_title(parameters[0])
@@ -113,28 +118,34 @@ class Renderer:
         ax1.set_title('Crank Torque')
         ax1.grid(True, alpha=0.3)
         
-        # Plot angular velocity
-        ax2.plot(times, angular_velocities, color='orange', linewidth=1)
+        # Plot RPM
+        ax2.plot(times, rpms, color='orange', linewidth=1)
         ax2.set_xlabel('Time (s)')
-        ax2.set_ylabel('Angular Velocity (rad/s)')
-        ax2.set_title('Angular Velocity')
+        ax2.set_ylabel('Engine Speed (RPM)')
+        ax2.set_title('Engine Speed')
         ax2.grid(True, alpha=0.3)
         
         # Add paused time indicators to both plots
         for time_point in paused_points:
             ax1.axvline(x=time_point, color='r', linestyle='--', alpha=0.5)
             ax2.axvline(x=time_point, color='r', linestyle='--', alpha=0.5)
+            
+        # Add throttle change indicators
+        for time_point, fuel_mass in throttle_changes:
+            ax1.axvline(x=time_point, color='g', linestyle='-.', alpha=0.5)
+            ax2.axvline(x=time_point, color='g', linestyle='-.', alpha=0.5)
+            ax1.text(time_point + 0.1, ax1.get_ylim()[1] * 0.9, 
+                    f'Fuel: {fuel_mass:.3f}g', 
+                    rotation=90, color='g')
+            ax2.text(time_point + 0.1, ax2.get_ylim()[1] * 0.9,
+                    f'Fuel: {fuel_mass:.3f}g',
+                    rotation=90, color='g')
         
         plt.tight_layout(pad=2)  # Adjust spacing between subplots to reduce overall height
         plt.show()
         plt.close(fig) 
 
-    def close_plot(self):
-        if hasattr(self, 'plot_process') and self.plot_process.is_alive():
-            self.plot_process.terminate()
-            self.plot_process.join()
-
-    def close_comparison_plot(self, engine_design_id):
+    def close_plot(self, engine_design_id):
         if engine_design_id in self.open_design_plots:
             process = self.open_design_plots[engine_design_id]
             if process.is_alive():

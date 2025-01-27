@@ -1,171 +1,70 @@
 import pyglet
-import math
-import mechanicalComponents
 import time
 from vector import Vector
 from renderer import Renderer
+from simulation import Simulation
 import sqlite3
 import widgets
 
-class GasSimulation():
-    def __init__(self):
-        self.t_max = 2273
-        self.t_min = 623
-        self.mol_max = 0.748
-        self.mol_min = 0.594
-        self.vol_max = 0.5
-        self.vol_min = 1
-        self.t_difference = self.t_max - self.t_min
-
-    def get_temperature(self, theta):
-        if 0 <= theta < 0.1:
-            return self.t_max
-
-        elif 0.1 <= theta <= math.pi:
-            k = 1.5 
-            return self.t_min + (self.t_max - self.t_min) * math.exp(-k * (theta - 0.1))
-        else:
-            fraction = (theta - math.pi) / math.pi
-            amplitude = 0.1 * (self.t_max - self.t_min)
-            return self.t_min + amplitude * (1 - math.cos(math.pi * fraction))
-
-    def get_gas_mol(self, theta):
-        if 0 <= theta <= math.pi:
-            #print(self.mol_max - (self.mol_max - self.mol_min) * (theta / math.pi))
-            return self.mol_max - (self.mol_max - self.mol_min) * (theta / math.pi)
-        else:
-            #print(self.mol_max + (self.mol_max - self.mol_min) * ((theta - math.pi) / math.pi))
-            return self.mol_min + (self.mol_max - self.mol_min) * ((theta - math.pi) / math.pi)
-            
-    def get_height(self, theta):
-        # test func
-        if 0 <= theta <= math.pi:
-            return self.vol_max - (self.vol_max - self.vol_min) * (theta / math.pi)
-        else:
-            return self.vol_min + (self.vol_max - self.vol_min) * ((theta - math.pi) / math.pi)
-        
-    def calculate_force(self, theta, dt):
-        temperature = self.get_temperature(theta)
-        mols = self.get_gas_mol(theta)
-        cylinder_height = self.get_height(theta)
-        pressure = mols*8.31*temperature
-        force = pressure/cylinder_height
-        #print(force)
-        return force
-
-class Simulation():
-    def __init__(self, crank_radius, crank_mass, connectorRod_length, rod_mass, piston_radius, piston_mass): 
-        self.crank = mechanicalComponents.Crank(crank_radius, crank_mass)
-        self.piston = mechanicalComponents.Piston(piston_mass,  piston_radius, crank_radius + connectorRod_length)
-        self.connector_rod = mechanicalComponents.ConnectorRod(rod_mass, connectorRod_length, crank_radius)
-        self.gas_simulation = GasSimulation()
-
-        self.component_weight = (rod_mass + piston_mass) * 9.81
- 
-    def update_all(self, dt):
-        gas_force = self.gas_simulation.calculate_force(self.crank.angle_radians, dt)
-        friction_force = self.calculate_friction()
-        total_force = gas_force + self.component_weight + friction_force
-        rod_direction_vector = self.find_rod_direction_vector()
-        force_parallel_to_rod = self.transfer_force_to_rod(total_force, rod_direction_vector)
-        force_tangent_to_crank = self.transfer_force_to_crank(force_parallel_to_rod, rod_direction_vector)
-
-        #temperature = self.gas_simulation.get_temperature(self.crank.angle_radians)
-
-        self.crank.update(force_tangent_to_crank, dt)
-        self.connector_rod.update(self.crank.calculate_delta_theta(dt))
-        self.piston.update(self.connector_rod.rod_end.y, dt)
-        
-        # Calculate current RPM
-
-        #if self.crank.rpm > 6000 and self.crank.rpm < 7000:
-        #    self.crank.angular_velocity = 3000
-
-    def calculate_velocity_gradient(self, velocity, film_thickness):
-        return -8 * velocity / film_thickness
-        '''
-    def calculate_acceleration_gradient(self, velocity, previous_velocity, previous_acceleration, dt):
-        acceleration = (velocity - previous_velocity) / dt
-        acceleration_gradient = (acceleration - previous_acceleration) / dt
-        return acceleration_gradient
-        '''        
-    def calculate_pressure_gradient(self, dynamic_viscosity, film_thickness):
-        velocity_gradient = self.calculate_velocity_gradient(self.piston.velocity, film_thickness)
-        return dynamic_viscosity * velocity_gradient
-
-    def calculate_friction(self):
-        film_thickness = 1e-6 # placeholder
-        dynamic_viscosity = 0.01
-        pressure_gradient = self.calculate_pressure_gradient(dynamic_viscosity, film_thickness)
-        shear_stress = 0.5 * film_thickness * pressure_gradient + dynamic_viscosity * self.piston.velocity / film_thickness
-        piston_area = math.pi * self.piston.RADIUS**2 * 0.1 # what absolute retard made the height 10m
-        total_friction = shear_stress * piston_area
-
-        return total_friction
-
-    def find_normal_to_crank_motion(self, theta):
-        if theta == math.pi/2:
-            return Vector(0, 1)
-        else:
-            return Vector(1, math.tan(theta))
-   
-    def find_rod_direction_vector(self):
-        return Vector(self.connector_rod.rod_end.x - self.connector_rod.rod_start.x, self.connector_rod.rod_end.y - self.connector_rod.rod_start.y) #this naming convention looks so stupid
-    
-    def transfer_force_to_rod(self, force, rod_direction_vector):
-        piston_to_rod_angle = rod_direction_vector.angle_between(Vector(0, 1))
-
-        return force/math.cos(piston_to_rod_angle)
- 
-    def transfer_force_to_crank(self, force, rod_direction_vector):
-        normalised_angle = (-self.crank.angle_radians + math.pi/2) % (2 * math.pi)
-        normal_to_crank_motion = self.find_normal_to_crank_motion(normalised_angle)
-        rod_to_crank_angle = 3 * math.pi / 2 - normal_to_crank_motion.angle_between(rod_direction_vector)
-
-        if self.crank.angle_radians < math.pi:
-            return -math.cos(rod_to_crank_angle) * force
-        else:
-            return math.cos(rod_to_crank_angle) * force
-
 class SimulationWindow(pyglet.window.Window):
     def __init__(self, *args, **kwargs):
-        kwargs.update({'width': 1200, 'height': 720, 'resizable': False})
         super().__init__(*args, **kwargs)
         self.static_batch = pyglet.graphics.Batch()
         self.simulation_batch = pyglet.graphics.Batch()
-        self.renderer = Renderer(self.simulation_batch, Vector(0, 0), 0, 0, 0)
+        self.renderer = Renderer(self.simulation_batch, Vector(0, 0), 0, 0, 0, 0)
         self.simulation_paused = True
         self.last_save_id = None
         self.fps_display = pyglet.window.FPSDisplay(self)
-        self.simulation_speed_factor = 0.02  # 50x slower
+        self.simulation_speed_factor = 0.01  # 50x slower
 
 
         self.origin = Vector(300, 200)
-        simulation_area_width = 700
-        ui_start_x = simulation_area_width + 50
-        ui_start_y = 650
-        ui_spacing = 50
-        textbox_width = 70
+        simulation_area_width = 600
+        ui_start_x = simulation_area_width + 100
+        ui_start_y = 750
+        ui_spacing = 40
+        textbox_width = 100
 
-        self.widgets = [
-            widgets.TextBox("Crank Radius:", ui_start_x, ui_start_y, textbox_width, self.static_batch),
-            widgets.TextBox("Crank Mass:", ui_start_x, ui_start_y - ui_spacing, textbox_width, self.static_batch),
-            widgets.TextBox("Connecting Rod Length:", ui_start_x, ui_start_y - 2 * ui_spacing, textbox_width, self.static_batch),
-            widgets.TextBox("Connecting Rod Mass:", ui_start_x, ui_start_y - 3 * ui_spacing, textbox_width, self.static_batch),
-            widgets.TextBox("Piston Radius:", ui_start_x, ui_start_y - 4 * ui_spacing, textbox_width, self.static_batch),
-            widgets.TextBox("Piston Mass:", ui_start_x, ui_start_y - 5 * ui_spacing, textbox_width, self.static_batch),
-            widgets.TextBox("Configuration Name:", ui_start_x, ui_start_y - 6 * ui_spacing, textbox_width, self.static_batch)
+        self.labels = [
+            pyglet.text.Label("Fuel Flow Rate", x=ui_start_x, y=ui_start_y,
+                              color=(255, 255, 255, 255), batch=self.static_batch),
+            pyglet.text.Label("Crank", x=ui_start_x, y=ui_start_y - 2 * ui_spacing,
+                              color=(255, 255, 255, 255), batch=self.static_batch),
+            pyglet.text.Label("Connecting Rod", x=ui_start_x, y=ui_start_y - 5 * ui_spacing,
+                              color=(255, 255, 255, 255), batch=self.static_batch),
+            pyglet.text.Label("Piston", x=ui_start_x, y=ui_start_y - 8 * ui_spacing,
+                              color=(255, 255, 255, 255), batch=self.static_batch),
+            pyglet.text.Label("Manage Saves", x=ui_start_x, y=ui_start_y - 13 * ui_spacing,
+                              color=(255, 255, 255, 255), batch=self.static_batch)
         ]
 
-        buttons_y = ui_start_y - 7 * ui_spacing - 20
+        self.parameter_input_widgets = [
+            widgets.TextBox("Fuel injected per cycle (g):", ui_start_x, ui_start_y - ui_spacing, textbox_width, self.static_batch),
+            # Crank Inputs
+            widgets.TextBox("Radius (mm):", ui_start_x, ui_start_y - 3 * ui_spacing, textbox_width, self.static_batch),
+            widgets.TextBox("Mass (kg):", ui_start_x, ui_start_y - 4 * ui_spacing, textbox_width, self.static_batch),
+            # Connecting Rod Inputs
+            widgets.TextBox("Length (mm):", ui_start_x, ui_start_y - 6 * ui_spacing, textbox_width, self.static_batch),
+            widgets.TextBox("Mass (kg):", ui_start_x, ui_start_y - 7 * ui_spacing, textbox_width, self.static_batch),
+            # Piston Inputs
+            widgets.TextBox("Radius (mm):", ui_start_x, ui_start_y - 9 * ui_spacing, textbox_width, self.static_batch),
+            widgets.TextBox("Length (mm):", ui_start_x, ui_start_y - 10 * ui_spacing, textbox_width, self.static_batch), 
+            widgets.TextBox("Mass (kg):", ui_start_x, ui_start_y - 11 * ui_spacing, textbox_width, self.static_batch),
+            widgets.TextBox("Deck Clearance (mm):", ui_start_x, ui_start_y - 12 * ui_spacing, textbox_width, self.static_batch),
+            widgets.TextBox("Configuration Name:", ui_start_x, ui_start_y - 14 * ui_spacing, textbox_width, self.static_batch)
+        ]
+
+        buttons_y = ui_start_y - 15 * ui_spacing - 20
         button_width = 180
         button_height = 50
         button_spacing = 20
         self.button_widgets = [
             widgets.Button("Pause/Unpause", ui_start_x, buttons_y, button_width, button_height, 
                    self.toggle_simulation_pause_button, self.static_batch),
-            widgets.Button("Start Simulation", ui_start_x + button_width + button_spacing, buttons_y, 
+            widgets.Button("Set Parameters", ui_start_x + button_width + button_spacing, buttons_y, 
                    button_width, button_height, self.start_simulation_button, self.static_batch),
+            widgets.Button("Starter", ui_start_x + 2 * button_width + 2 * button_spacing, buttons_y, 
+                   button_width, button_height, self.ignition_starter, self.static_batch),
             widgets.Button("Save Parameters", ui_start_x, buttons_y - button_height - button_spacing, 
                    button_width, button_height, self.save_parameters_button, self.static_batch),
             widgets.Button("Delete Record", ui_start_x + button_width + button_spacing, 
@@ -203,13 +102,19 @@ class SimulationWindow(pyglet.window.Window):
     def sample_graph_point(self, _dt):
         if self.simulation_paused is True: return
         current_time = (time.perf_counter() - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor
-        torque = self.simulation.crank.instantenous_torque
-        angular_velocity = self.simulation.crank.angular_velocity
-        self.renderer.store_graph_point(current_time, torque, angular_velocity)
+        torque = round(self.simulation.crank.instantenous_torque, 6)
+        rpm = round(self.simulation.crank.get_rpm(), 6)
+        self.renderer.store_graph_point(current_time, torque, rpm)
+
+    def update_fuel_flow_rate(self, fuel_flow_rate):
+        if hasattr(self, 'simulation') and fuel_flow_rate != "":
+            self.simulation.update_fuel_flow_rate(fuel_flow_rate)
+            current_time = (time.perf_counter() - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor
+            self.renderer.store_throttle_change_point(current_time, fuel_flow_rate)
 
     def save_parameters_button(self):
-        if hasattr(self, 'simulation_parameters'): 
-            configuration_name = self.widgets[6].document.text
+        if hasattr(self, 'renderer_parameters'): 
+            configuration_name = self.parameter_input_widgets[9].document.text  # Changed from widgets[8] to widgets[7]
             if configuration_name:
                 conn = sqlite3.connect('database.db')
                 cursor = conn.cursor()
@@ -227,11 +132,12 @@ class SimulationWindow(pyglet.window.Window):
                 self.last_save_id = cursor.lastrowid
                 self.save_engine_performance_data(cursor, self.last_save_id)
                 self.save_paused_points(cursor, self.last_save_id)
+                self.save_throttle_change_points(cursor, self.last_save_id)
                 
                 conn.commit()
                 conn.close()
                 self.list_box.update_table(self.get_engine_design_entries())
-                self.widgets[6].document.text = ""
+                self.parameter_input_widgets[8].document.text = ""
 
     def save_configuration(self, cursor, configuration_name, *parameters):
             # First create table if not exists without separate timestamp
@@ -244,15 +150,17 @@ class SimulationWindow(pyglet.window.Window):
                     rod_length REAL,
                     rod_mass REAL,
                     piston_radius REAL,
+                    piston_length REAL,
+                    deck_clearance REAL,
                     piston_mass REAL
                 )
             ''')
-        record_name = f"{time.strftime('%H:%M:%S')} - {configuration_name}"
+        record_name = f"{time.strftime('%H:%M:%S')} | {configuration_name}"
         cursor.execute('''
                 INSERT INTO engine_designs (
                     configuration_name, crank_radius, crank_mass, 
-                    rod_length, rod_mass, piston_radius, piston_mass
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    rod_length, rod_mass, piston_radius, piston_length, deck_clearance, piston_mass
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (record_name, *parameters))
 
     def save_engine_performance_data(self, cursor, engine_design_id):
@@ -261,18 +169,18 @@ class SimulationWindow(pyglet.window.Window):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 engine_design_id INTEGER,
                 torque REAL,
-                angular_velocity REAL,
+                rpm REAL,
                 time REAL,
                 FOREIGN KEY(engine_design_id) REFERENCES engine_designs(id)
             )
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_time ON engine_performance_data(time)')
         cursor.execute('PRAGMA floating_point_numbers=ON')
-        for time_point, torque_point, angular_velocity in self.renderer.graph_points:
+        for time_point, torque_point, rpm in self.renderer.graph_points:
             cursor.execute('''
-                INSERT INTO engine_performance_data (engine_design_id, torque, angular_velocity, time)
+                INSERT INTO engine_performance_data (engine_design_id, torque, rpm, time)
                 VALUES (?, ?, ?, ?)
-            ''', (engine_design_id, round(torque_point, 6), round(angular_velocity, 6), round(time_point, 6)))
+            ''', (engine_design_id, torque_point, rpm, time_point))
 
     def save_paused_points(self, cursor, engine_design_id):                    
         cursor.execute('''
@@ -288,6 +196,22 @@ class SimulationWindow(pyglet.window.Window):
                 INSERT INTO paused_points (engine_design_id, paused_time)
                 VALUES (?, ?)
             ''', (engine_design_id, paused_time))
+
+    def save_throttle_change_points(self, cursor, engine_design_id):
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS throttle_change_points (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engine_design_id INTEGER,
+                time REAL,
+                fuel_flow_rate REAL,
+                FOREIGN KEY(engine_design_id) REFERENCES engine_designs(id)
+            )
+        ''')
+        for time_point, fuel_flow_rate in self.renderer.throttle_change_points:
+            cursor.execute('''
+                INSERT INTO throttle_change_points (engine_design_id, time, fuel_flow_rate)
+                VALUES (?, ?, ?)
+            ''', (engine_design_id, time_point, fuel_flow_rate))
         
     def delete_record_button(self):
         conn = sqlite3.connect('database.db')
@@ -297,7 +221,7 @@ class SimulationWindow(pyglet.window.Window):
             focused_row_id = focused_row[0]
             if focused_row_id == self.last_save_id:
                 self.button_widgets[2].label.text = "Save Parameters"
-            self.renderer.close_comparison_plot(focused_row_id)
+            self.renderer.close_plot(focused_row_id)
             self.delete_record(cursor, focused_row_id)
             conn.commit()
             conn.close()
@@ -307,25 +231,33 @@ class SimulationWindow(pyglet.window.Window):
             cursor.execute('DELETE FROM engine_designs WHERE id = ?', (save_id,))
             cursor.execute('DELETE FROM engine_performance_data WHERE engine_design_id = ?', (save_id,))
             cursor.execute('DELETE FROM paused_points WHERE engine_design_id = ?', (save_id,))
+            cursor.execute('DELETE FROM throttle_change_points WHERE engine_design_id = ?', (save_id,))
 
     def get_engine_design_entries(self):
         conn = sqlite3.connect('database.db')
         cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='engine_designs'")
-        if cursor.fetchone() is not None:
-            cursor.execute('SELECT id, configuration_name, crank_radius, crank_mass, rod_length, rod_mass, piston_radius, piston_mass FROM engine_designs')  # Explicitly list columns
-            entries = cursor.fetchall()
+        try:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='engine_designs'")
+            if cursor.fetchone() is not None:
+                cursor.execute('SELECT id, configuration_name, crank_radius, crank_mass, rod_length, rod_mass, piston_radius, piston_length, deck_clearance, piston_mass FROM engine_designs')  # Explicitly list columns
+                entries = cursor.fetchall()
+            else:
+                raise sqlite3.OperationalError("Table 'engine_designs' does not exist in the database")
+        except sqlite3.OperationalError as e:
+            print(f"Database error: {e}")
+            entries = []
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            entries = []
+        finally:
             conn.close()
-            return entries
-        else:
-            conn.close()
-            return []
+            return entries  
 
     def load_engine_performance_data(self, engine_design_id):
         conn = sqlite3.connect('database.db')
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT time, torque, angular_velocity FROM engine_performance_data
+            SELECT time, torque, rpm FROM engine_performance_data
             WHERE engine_design_id = ?
             ORDER BY time ASC
         ''', (engine_design_id,))
@@ -345,16 +277,28 @@ class SimulationWindow(pyglet.window.Window):
         conn.close()
         return [point[0] for point in paused_points]
     
+    def load_throttle_change_points(self, engine_design_id):
+        conn = sqlite3.connect('database.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT time, fuel_flow_rate FROM throttle_change_points
+            WHERE engine_design_id = ?
+            ORDER BY time ASC
+        ''', (engine_design_id,))
+        points = cursor.fetchall()
+        conn.close()
+        return points
+
     def load_plot(self, selected_record):
         engine_design_id = selected_record[0]
-        print(engine_design_id)
         data_points = self.load_engine_performance_data(engine_design_id)
         paused_points = self.load_paused_points(engine_design_id)
+        throttle_changes = self.load_throttle_change_points(engine_design_id)
         times, torques, angular_velocities = zip(*data_points)
-        self.renderer.plot_performance_comparison(times, torques, angular_velocities, paused_points, engine_design_id, selected_record[1:])
+        self.renderer.plot_performance(times, torques, angular_velocities, paused_points, throttle_changes, engine_design_id, selected_record[1:])
 
     def start_simulation_button(self):
-        inputs = [widget.document.text for widget in self.widgets[0:6]]
+        inputs = [widget.document.text for widget in self.parameter_input_widgets[1:9]]  # Get first 8 inputs (excluding config name)
         if "" in inputs: 
             return
         parameters = list(map(float, inputs))
@@ -365,18 +309,20 @@ class SimulationWindow(pyglet.window.Window):
             print("Connector Rod Length cannot be smaller than Crank Radius")
             return
             
-        self.renderer_parameters = list(map(float, parameters))
-        self.renderer.close_plot()
+        self.renderer_parameters = parameters
+        self.renderer.close_plot(0)
             
         self.simulation_batch = pyglet.graphics.Batch()
         simulation_parameters = self.renderer_parameters.copy()
-        for i in [0, 2, 4]:
+        # Convert mm to m for physical calculations:
+        # [0]=crank_radius, [2]=rod_length, [4]=piston_radius, [5]=piston_length, [7]=deck_clearance
+        for i in [0, 2, 4, 5, 7]:
             simulation_parameters[i] = self.mm_to_m(simulation_parameters[i])
 
-        #simulation_parameters = list(map(self.mm_to_m, simulation_parameters))
         self.simulation = Simulation(*simulation_parameters)
         self.renderer = Renderer(self.simulation_batch, self.origin, 
-                                 self.renderer_parameters[0], self.renderer_parameters[2], self.renderer_parameters[4])
+                                 self.renderer_parameters[0], self.renderer_parameters[2], 
+                                 self.renderer_parameters[4], self.renderer_parameters[5])
         self.start_time = time.perf_counter()
         self.elapsed_pause_time = 0
         self.button_widgets[2].label.text = "Save Parameters"
@@ -387,17 +333,18 @@ class SimulationWindow(pyglet.window.Window):
             self.simulation_paused = not self.simulation_paused
             if self.simulation_paused:
                 self.time_paused = time.perf_counter()
-                self.renderer.store_paused_point((self.time_paused - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor)
-                self.renderer.close_plot()
-                named_parameters = self.renderer_parameters.copy()
-                named_parameters.insert(0, "Active Configuration")
-                self.renderer.plot_torque(named_parameters)
-                #self.plot_process = multiprocessing.Process(target=self.renderer.plot_torque)
-                #self.plot_process.start()
+                current_time = (self.time_paused - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor
+                self.renderer.store_paused_point(current_time)
+                named_parameters = ["Active Configuration"] + self.renderer_parameters
+                self.renderer.plot_active_configuration(named_parameters)
             else:
                 time_resumed = time.perf_counter()
                 self.elapsed_pause_time += time_resumed - self.time_paused
-                self.renderer.close_plot()
+                self.renderer.close_plot(0)
+
+    def ignition_starter(self):
+        if hasattr(self, 'simulation'):
+            self.simulation.crank.angular_velocity += 1500
 
     def mm_to_m(self, value):
         return value / 1000.0
@@ -429,15 +376,17 @@ class SimulationWindow(pyglet.window.Window):
         
     def cycle_focus(self, direction):
         if self.is_focused_widget_set():
-            index = self.widgets.index(self.focused_widget)
-            new_index = (index + direction) % len(self.widgets)
+            index = self.parameter_input_widgets.index(self.focused_widget)
+            new_index = (index + direction) % len(self.parameter_input_widgets)
+            if new_index == 0:
+                new_index = 1
         else:
-            new_index = 0
+            new_index = 1
 
-        self.focus_widget(self.widgets[new_index])
+        self.focus_widget(self.parameter_input_widgets[new_index])
 
     def on_mouse_motion(self, x, y, _dx, _dy):
-        for widget in self.widgets:
+        for widget in self.parameter_input_widgets:
             if widget.is_mouseover(x, y):
                 self.set_mouse_cursor(self.text_cursor)
                 break
@@ -463,7 +412,7 @@ class SimulationWindow(pyglet.window.Window):
                     button_widget.on_click()
                     return
 
-            for widget in self.widgets:
+            for widget in self.parameter_input_widgets:
                 if widget.is_mouseover(x, y):
                     if self.focused_widget == widget:
                         break
@@ -486,7 +435,7 @@ class SimulationWindow(pyglet.window.Window):
         if text in ("\r", "\n"):
             return
         if self.is_focused_widget_set():
-            if self.focused_widget is not self.widgets[6]:
+            if self.focused_widget is not self.parameter_input_widgets[9]:  # Changed from widgets[8] to widgets[7]
                 allowed_chars = "0123456789."
                 if text not in allowed_chars:
                     return
@@ -518,18 +467,19 @@ class SimulationWindow(pyglet.window.Window):
 
         elif symbol == pyglet.window.key.ENTER:
             if self.is_focused_widget_set():
-
-                self.cycle_focus(1)
+                if self.focused_widget is self.parameter_input_widgets[0]:
+                    self.update_fuel_flow_rate(float(self.focused_widget.document.text))
+                    self.focused_widget.clear_focus()
+                    self.focused_widget = None
+                else:
+                    self.cycle_focus(1)
 
 if __name__ == "__main__":
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
-    #cursor.execute("DROP TABLE IF EXISTS engine_designs")
-    #cursor.execute("DROP TABLE IF EXISTS torque_time_data")
-    #cursor.execute("DROP TABLE IF EXISTS paused_points")
     conn.commit()
     conn.close()
-    simulation = SimulationWindow(width=1280, height=720, caption="Simulation", resizable = True, vsync=False)
+    simulation = SimulationWindow(width=1280, height=900, resizable=False, caption="Piston Engine Simulation", vsync=False)
     pyglet.clock.schedule_interval(simulation.update_simulation, 1/3000) 
     pyglet.clock.schedule_interval(simulation.sample_graph_point, 1/1000)
     #pyglet.options['com_mta'] = True
