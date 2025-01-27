@@ -97,6 +97,7 @@ class SimulationWindow(pyglet.window.Window):
         current_time = (time.perf_counter() - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor
         torque = round(self.simulation.crank.instantenous_torque, 6)
         rpm = round(self.simulation.crank.get_rpm(), 6)
+        print(rpm)
         self.renderer.store_graph_point(current_time, torque, rpm)
 
     def update_fuel_flow_rate(self, fuel_flow_rate):
