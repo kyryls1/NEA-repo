@@ -29,7 +29,7 @@ class GasSimulation():
             return self.ambient_temperature + increase_amplitude * (1 - math.cos(math.pi * multiplier))
 
     def get_gas_moles(self, theta):
-        '''
+
         if 0 <= theta < 2:
             return self.moles_after_combustion
         elif 2 <= theta <= 5.2:
@@ -38,8 +38,8 @@ class GasSimulation():
             multiplier = (theta - 5.2) / (2*math.pi - 5.2)
             increase_amplitude = 0.03 * (self.moles_difference)
             return self.moles_before_combustion + increase_amplitude * math.sin(multiplier * math.pi/2)
-            '''
-        return self.moles_before_combustion + (self.moles_after_combustion - self.moles_before_combustion) * (1 + math.sin(theta)) / 2
+        
+        #return self.moles_before_combustion + (self.moles_after_combustion - self.moles_before_combustion) * (1 + math.sin(theta)) / 2
 
     def get_current_deck_clearance(self, piston_position):
         return self.cylinder_head_position.y - piston_position.y
@@ -84,7 +84,7 @@ class Simulation():
         return dynamic_viscosity * velocity_gradient
 
     def calculate_friction(self):
-        film_thickness = 1e-6 
+        film_thickness = 3e-6 
         dynamic_viscosity = 0.01
         pressure_gradient = self.calculate_pressure_gradient(dynamic_viscosity, film_thickness)
         shear_stress = 0.5 * film_thickness * pressure_gradient + dynamic_viscosity * self.piston.velocity / film_thickness
