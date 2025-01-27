@@ -1,6 +1,5 @@
 import math
 import matplotlib.pyplot as plt
-import time
 from linked_list import LinkedList
 from vector import Vector
 
@@ -29,9 +28,6 @@ class Crank():
         angular_momentum_change = torque * dt
         angular_velocity_change = angular_momentum_change / self.MOMENT_OF_INTERTIA
         self.angular_velocity += angular_velocity_change
-
-        #rpm = self.angular_velocity * 60 / (2 * math.pi)
-        #print(rpm)
  
     def update(self, force, dt):
         self.instantenous_torque = self.calculate_torque(force)
@@ -57,17 +53,11 @@ class ConnectorRod():
         delta_x = self.crank_anchor_vector.x - initial_x
         delta_y = self.crank_anchor_vector.y - initial_y
 
-        #self.rod.x += delta_x
-        #self.rod.y += delta_y
-        #self.crank_bearing.x += delta_x
-        #self.crank_bearing.y += delta_y
         self.rod_start.x += delta_x
         self.rod_start.y += delta_y
  
     def update_piston_anchor_position(self):
         delta_x = self.rod_end.x - self.rod_start.x
-        #self.rod.y2 = math.sqrt(self.LENGTH**2 - delta_x**2) + self.rod.y
-        #self.piston_bearing.y = self.rod.y2
         new_y = math.sqrt(self.LENGTH_SQUARED - delta_x ** 2) + self.rod_start.y
         self.rod_end.y = new_y
 
@@ -118,16 +108,6 @@ class Piston():
         film_thickness = min(1e-3, film_thickness)
 
         return film_thickness
-
-    def calculate_friction(self, temperature, load_force, angular_velocity):
-        # Updated friction formula using film thickness & Arrhenius viscosity
-        visc = self.calculate_viscosity(temperature)
-        film_thickness = self.calculate_film_thickness(load_force, temperature)
-
-        contact_area = 2 * math.pi * self.RADIUS * self.contact_height
-        friction_magnitude = visc * (self.velocity / film_thickness) * contact_area
-
-        return math.copysign(friction_magnitude, self.velocity)
 
     def update(self, y_coordinate, dt):
         self.position.y = y_coordinate

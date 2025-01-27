@@ -41,10 +41,10 @@ class Renderer:
         self.crankarm.rotation = angle_degrees
         self.axle.rotation = angle_degrees
 
-        self.rod.x = self.origin.x + rod.rod_start.x * 1000.0
-        self.rod.y = self.origin.y + rod.rod_start.y * 1000.0
-        self.rod.x2 = self.origin.x + rod.rod_end.x * 1000.0
-        self.rod.y2 = self.origin.y + rod.rod_end.y * 1000.0
+        self.rod.x = self.origin.x + rod.rod_start.x * 1000
+        self.rod.y = self.origin.y + rod.rod_start.y * 1000
+        self.rod.x2 = self.origin.x + rod.rod_end.x * 1000
+        self.rod.y2 = self.origin.y + rod.rod_end.y * 1000
 
         self.crank_bearing.x = self.rod.x
         self.crank_bearing.y = self.rod.y
@@ -85,14 +85,12 @@ class Renderer:
 
     @staticmethod
     def run_plot(times, torques, rpms, paused_points, throttle_changes, parameters):
-        # Create figure with reduced height for parameter text
         fig, (ax_text, ax1, ax2) = plt.subplots(3, 1, figsize=(10, 8), gridspec_kw={'height_ratios': [0.15, 1, 1]})
         fig.canvas.manager.set_window_title(parameters[0])
         
         # Hide the ax_text axes
         ax_text.axis('off')
         
-        # Format the simulation parameters with reduced font size and center alignment
         param_text = (
             f"Simulation Parameters\n"
             f"----------------------------------------\n"
@@ -134,10 +132,10 @@ class Renderer:
         for time_point, fuel_mass in throttle_changes:
             ax1.axvline(x=time_point, color='g', linestyle='-.', alpha=0.5)
             ax2.axvline(x=time_point, color='g', linestyle='-.', alpha=0.5)
-            ax1.text(time_point + 0.1, ax1.get_ylim()[1] * 0.9, 
+            ax1.text(time_point, ax1.get_ylim()[1] * 0.9, 
                     f'Fuel: {fuel_mass:.3f}g', 
                     rotation=90, color='g')
-            ax2.text(time_point + 0.1, ax2.get_ylim()[1] * 0.9,
+            ax2.text(time_point, ax2.get_ylim()[1] * 0.9,
                     f'Fuel: {fuel_mass:.3f}g',
                     rotation=90, color='g')
         
