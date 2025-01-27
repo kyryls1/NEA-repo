@@ -29,9 +29,6 @@ class Crank():
         angular_momentum_change = torque * dt
         angular_velocity_change = angular_momentum_change / self.MOMENT_OF_INTERTIA
         self.angular_velocity += angular_velocity_change
-
-        #rpm = self.angular_velocity * 60 / (2 * math.pi)
-        #print(rpm)
  
     def update(self, force, dt):
         self.instantenous_torque = self.calculate_torque(force)
@@ -118,17 +115,7 @@ class Piston():
         film_thickness = min(1e-3, film_thickness)
 
         return film_thickness
-
-    def calculate_friction(self, temperature, load_force, angular_velocity):
-        # Updated friction formula using film thickness & Arrhenius viscosity
-        visc = self.calculate_viscosity(temperature)
-        film_thickness = self.calculate_film_thickness(load_force, temperature)
-
-        contact_area = 2 * math.pi * self.RADIUS * self.contact_height
-        friction_magnitude = visc * (self.velocity / film_thickness) * contact_area
-
-        return math.copysign(friction_magnitude, self.velocity)
-
+    
     def update(self, y_coordinate, dt):
         self.position.y = y_coordinate
         self.update_velocity(dt)

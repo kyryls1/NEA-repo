@@ -8,20 +8,14 @@ class GasSimulation():
         self.ambient_temperature = 623
         self.temperature_difference = self.combustion_temperature - self.ambient_temperature
         self.t_min_min = 0.594 * 0.8    # in Kelvin
-        self.mol_max = 0.748
-        self.mol_min = 0.594
+        self.moles_after_combustion = 9/76 * 5
+        self.moles_before_combustion = 17/114 * 5
+        self.moles_difference = self.moles_after_combustion - self.moles_before_combustion
         self.vol_max = 0.5
         self.vol_min = 1
 
     def get_temperature(self, theta):
-        if 0 <= theta < 0.1:
-            return self.combustion_temperature
-        elif 0.1 <= theta <= math.pi:
-            return self.ambient_temperature + (self.temperature_difference) * math.exp(-1.5 * (theta - 0.1))
-        else:
-            multiplier = (theta - math.pi) / math.pi
-            increase_amplitude = 0.1 * (self.temperature_difference)
-            return self.ambient_temperature + increase_amplitude * (1 - math.cos(math.pi * multiplier))
+        return self.moles_before_combustion + (self.moles_after_combustion - self.moles_before_combustion) * (1 + math.sin(theta)) / 2
 
     def get_gas_mol(self, theta):
         if 0 <= theta < 2:
@@ -54,12 +48,12 @@ def main():
     # Generate theta values from 0 to 2pi radians
     num_points = 1000
     thetas = np.linspace(0, 2 * math.pi, num_points)
-    temperatures = [sim.get_temperature(theta) for theta in thetas]  # Changed to get temperature
+    gas_moles = [sim.get_gas_mol(theta) for theta in thetas]
     thetas_deg = np.degrees(thetas)
 
     # Create plot
     plt.figure(figsize=(12, 6))
-    plt.plot(thetas_deg, temperatures, label='Gas Temperature', color='red')  # Changed label and color
+    plt.plot(thetas_deg, gas_moles, label='Gas Moles', color='blue')
     
     # Add stroke transition lines
     plt.axvline(x=0, color='gray', linestyle='--', alpha=0.5)
@@ -69,18 +63,18 @@ def main():
     plt.axvline(x=360, color='gray', linestyle='--', alpha=0.5)
 
     # Add stroke labels with adjusted y-position
-    plt.text(45, sim.combustion_temperature, 'Intake', horizontalalignment='center')
-    plt.text(135, sim.combustion_temperature, 'Compression', horizontalalignment='center')
-    plt.text(225, sim.combustion_temperature, 'Power', horizontalalignment='center')
-    plt.text(315, sim.combustion_temperature, 'Exhaust', horizontalalignment='center')
+    plt.text(45, max(gas_moles), 'Intake', horizontalalignment='center')
+    plt.text(135, max(gas_moles), 'Compression', horizontalalignment='center')
+    plt.text(225, max(gas_moles), 'Power', horizontalalignment='center')
+    plt.text(315, max(gas_moles), 'Exhaust', horizontalalignment='center')
 
     plt.xlabel('Crank Angle (Degrees)')
-    plt.ylabel('Temperature (K)')  # Changed y-axis label
-    plt.title('Gas Temperature Variation Over Engine Cycle')  # Changed title
+    plt.ylabel('Gas Moles')
+    plt.title('Gas Moles Variation Over Engine Cycle')
     plt.legend()
     plt.grid(True)
     plt.xlim(0, 360)
-    plt.ylim(sim.ambient_temperature - 100, sim.combustion_temperature + 100)  # Adjusted y-axis limits
+    plt.ylim(min(gas_moles) - 0.1, max(gas_moles) + 0.1)
     plt.show()
 
 if __name__ == "__main__":
