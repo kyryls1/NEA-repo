@@ -5,6 +5,7 @@ from renderer import Renderer
 from simulation import Simulation
 import sqlite3
 import widgets
+import math
 
 class SimulationWindow(pyglet.window.Window):
     def __init__(self, *args, **kwargs):
@@ -14,6 +15,7 @@ class SimulationWindow(pyglet.window.Window):
         self.renderer = Renderer(self.simulation_batch, Vector(0, 0), 0, 0, 0, 0)
         self.fps_display = pyglet.window.FPSDisplay(self)
         self.simulation_paused = True
+        self.engine_stalled = True
         self.last_save_id = None
         self.simulation_speed_factor = 0.02  # 50x slower
         self.origin = Vector(300, 200)
@@ -38,18 +40,20 @@ class SimulationWindow(pyglet.window.Window):
         ]
 
         self.parameter_input_widgets = [
+            #Fuel Flow Rate
             widgets.TextBox("Fuel injected per cycle (g):", ui_start_x, ui_start_y - ui_spacing, textbox_width, self.static_batch),
-            # Crank Inputs
+            # Crank
             widgets.TextBox("Radius (mm):", ui_start_x, ui_start_y - 3 * ui_spacing, textbox_width, self.static_batch),
             widgets.TextBox("Mass (kg):", ui_start_x, ui_start_y - 4 * ui_spacing, textbox_width, self.static_batch),
-            # Connecting Rod Inputs
+            # Connecting Rod
             widgets.TextBox("Length (mm):", ui_start_x, ui_start_y - 6 * ui_spacing, textbox_width, self.static_batch),
             widgets.TextBox("Mass (kg):", ui_start_x, ui_start_y - 7 * ui_spacing, textbox_width, self.static_batch),
-            # Piston Inputs
+            # Piston
             widgets.TextBox("Radius (mm):", ui_start_x, ui_start_y - 9 * ui_spacing, textbox_width, self.static_batch),
             widgets.TextBox("Length (mm):", ui_start_x, ui_start_y - 10 * ui_spacing, textbox_width, self.static_batch), 
             widgets.TextBox("Mass (kg):", ui_start_x, ui_start_y - 11 * ui_spacing, textbox_width, self.static_batch),
             widgets.TextBox("Deck Clearance (mm):", ui_start_x, ui_start_y - 12 * ui_spacing, textbox_width, self.static_batch),
+            #Manage Saves
             widgets.TextBox("Configuration Name:", ui_start_x, ui_start_y - 14 * ui_spacing, textbox_width, self.static_batch)
         ]
 
@@ -86,12 +90,21 @@ class SimulationWindow(pyglet.window.Window):
         self.simulation_batch.draw()
 
     def update_simulation(self, dt):
-        if not self.simulation_paused:
+        if not self.simulation_paused and not self.engine_stalled:
             scaled_dt = dt * self.simulation_speed_factor
+            
+            if self.simulation.crank.get_rpm() > self.simulation.gas_simulation.STARTING_RPM:
+                self.simulation.gas_simulation.decompression_valve_open = False
+            else:
+                self.simulation.gas_simulation.decompression_valve_open = True
+                
             self.simulation.update_all(scaled_dt)
             self.renderer.render(self.simulation.crank, self.simulation.connector_rod, self.simulation.piston)
+            
             if self.simulation.crank.angular_velocity < 0:
                 print("Stall")
+                self.simulation.crank.angular_velocity = 0
+                self.engine_stalled = True  # Set stalled state
 
     def sample_graph_point(self, _dt):
         if self.simulation_paused is True: 
@@ -339,16 +352,17 @@ class SimulationWindow(pyglet.window.Window):
 
     def ignition_starter_button(self):
         if hasattr(self, 'simulation') and self.simulation_paused is False:
-            if abs(self.simulation.crank.angular_velocity) < 1:  # Only start if engine is relatively slow/stopped
+            if self.engine_stalled:
+                self.engine_stalled = False
                 pyglet.clock.schedule_interval(self.starter, 0.01)
-                pyglet.clock.schedule_once(self.starter_cutout, 0.5)
+                pyglet.clock.schedule_once(self.starter_cutout, 1)
 
     def starter_cutout(self, _dt):
         pyglet.clock.unschedule(self.starter)
 
     def starter(self, _dt):
-        starting_torque = 50 
-        self.simulation.crank.update_angular_velocity(starting_torque, _dt * self.simulation_speed_factor)
+        starting_force = 50
+        self.simulation.crank.update_angular_velocity(starting_force, _dt * self.simulation_speed_factor)
         print(f"Starter applied, current RPM: {self.simulation.crank.get_rpm()}")
 
     def mm_to_m(self, value):

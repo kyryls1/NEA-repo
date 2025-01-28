@@ -11,6 +11,8 @@ class GasSimulation():
         self.temperature_difference = self.combustion_temperature - self.ambient_temperature
         self.moles_difference = self.moles_after_combustion - self.moles_before_combustion
         self.cylinder_head_position = Vector(0, crank_radius + connector_rod_length + deck_clearance)
+        self.decompression_valve_open = True
+        self.STARTING_RPM = 300  # RPM at which decompression valve closes
 
     def update_fuel_flow_rate(self, mass_flow_rate):
         self.moles_before_combustion = mass_flow_rate * 9/76
@@ -44,7 +46,12 @@ class GasSimulation():
         temperature = self.get_temperature(theta)
         mols = self.get_gas_moles(theta)
         gas_volume_height = self.get_current_deck_clearance(piston_position)
-        pressure = mols*8.31*temperature
+        
+        if self.decompression_valve_open:
+            pressure = (mols * 8.31 * temperature) * 0.1
+        else:
+            pressure = mols * 8.31 * temperature
+            
         force = pressure/gas_volume_height
         return force
 
@@ -85,20 +92,14 @@ class Simulation():
         pressure_gradient = self.calculate_pressure_gradient(dynamic_viscosity, film_thickness)
         shear_stress = 0.5 * film_thickness * pressure_gradient + dynamic_viscosity * self.piston.velocity / film_thickness
 
-        # Number of rings fixed at 2, each assumed ~2mm wide
         ring_contact_width = 0.002
         ring_friction_coefficient = 0.15
         skirt_friction_coefficient = 0.05
 
-        # Calculate ring contact area
         ring_area = 2 * (2 * math.pi * self.piston.RADIUS * ring_contact_width)
 
-        # Calculate skirt area
         skirt_area = self.piston.surface_area - ring_area
-        if skirt_area < 0:
-            skirt_area = 0  # Safeguard if ring_area is overestimated
 
-        # Split friction
         ring_friction = shear_stress * ring_area * ring_friction_coefficient
         skirt_friction = shear_stress * skirt_area * skirt_friction_coefficient
 

@@ -14,22 +14,22 @@ class Renderer:
         self.piston_radius = piston_radius_mm
         self.piston_length = piston_length_mm
         self.open_design_plots = {}
-
-        self.axle = pyglet.shapes.Circle(x=origin.x, y=origin.y, radius=20, color=[201, 201, 201], batch=batch)
-        self.crankarm = pyglet.shapes.Line(x=origin.x, y=origin.y, x2=origin.x, y2=origin.y + crank_radius_mm, 
-                                           thickness=40, color=[255, 255, 255], batch=batch)
-        self.crank_bearing = pyglet.shapes.Circle(x=origin.x, y=origin.y + crank_radius_mm, 
-                                                  radius=20, color=[255, 255, 255], batch=batch)        
+        
+        self.rod = pyglet.shapes.Line(x=origin.x, y=origin.y + crank_radius_mm, x2=origin.x, 
+                                      y2=origin.y + crank_radius_mm + rod_length_mm, thickness=15, color=[201, 201, 201], batch=batch)
+        self.piston_bearing = pyglet.shapes.Circle(x=origin.x, y=origin.y + crank_radius_mm + rod_length_mm, 
+                                                   radius=15, color=[201, 201, 201], batch=batch)
         self.piston = pyglet.shapes.Rectangle(x=origin.x - piston_radius_mm, 
                                               y=origin.y + crank_radius_mm + rod_length_mm, 
                                               width=piston_radius_mm * 2, 
                                               height=piston_length_mm, 
                                               color=[255, 255, 255], 
                                               batch=batch)
-        self.piston_bearing = pyglet.shapes.Circle(x=origin.x, y=origin.y + crank_radius_mm + rod_length_mm, 
-                                                   radius=15, color=[201, 201, 201], batch=batch)
-        self.rod = pyglet.shapes.Line(x=origin.x, y=origin.y + crank_radius_mm, x2=origin.x, 
-                                      y2=origin.y + crank_radius_mm + rod_length_mm, thickness=15, color=[201, 201, 201], batch=batch)
+        self.crank_bearing = pyglet.shapes.Circle(x=origin.x, y=origin.y + crank_radius_mm, 
+                                                  radius=20, color=[255, 255, 255], batch=batch)
+        self.crankarm = pyglet.shapes.Line(x=origin.x, y=origin.y, x2=origin.x, y2=origin.y + crank_radius_mm, 
+                                           thickness=40, color=[255, 255, 255], batch=batch)
+        self.axle = pyglet.shapes.Circle(x=origin.x, y=origin.y, radius=20, color=[201, 201, 201], batch=batch)
         
         self.graph_points = LinkedList()
         self.paused_points = LinkedList()

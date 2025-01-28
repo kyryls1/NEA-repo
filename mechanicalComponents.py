@@ -7,7 +7,7 @@ class Crank():
     def __init__(self, radius, mass): 
         self.RADIUS = radius
         self.MASS = mass
-        self.MOMENT_OF_INTERTIA = self.MASS * self.RADIUS**2
+        self.MOMENT_OF_INERTIA = self.MASS * self.RADIUS**2
         self.torque_history = LinkedList()
 
         self.angular_velocity = 0
@@ -26,7 +26,7 @@ class Crank():
 
     def update_angular_velocity(self, torque, dt):
         angular_momentum_change = torque * dt
-        angular_velocity_change = angular_momentum_change / self.MOMENT_OF_INTERTIA
+        angular_velocity_change = angular_momentum_change / self.MOMENT_OF_INERTIA
         self.angular_velocity += angular_velocity_change
  
     def update(self, force, dt):
