@@ -353,7 +353,6 @@ class SimulationWindow(pyglet.window.Window):
     def ignition_starter_button(self):
         if hasattr(self, 'simulation') and self.simulation_paused is False:
             if self.engine_stalled:
-                self.engine_stalled = False
                 pyglet.clock.schedule_interval(self.starter, 0.01)
                 pyglet.clock.schedule_once(self.starter_cutout, 1)
 
@@ -364,6 +363,7 @@ class SimulationWindow(pyglet.window.Window):
         starting_force = 50
         self.simulation.crank.update_angular_velocity(starting_force, _dt * self.simulation_speed_factor)
         print(f"Starter applied, current RPM: {self.simulation.crank.get_rpm()}")
+        self.engine_stalled = False
 
     def mm_to_m(self, value):
         return value / 1000.0
