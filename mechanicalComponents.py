@@ -10,7 +10,7 @@ class Crank():
         self.MOMENT_OF_INTERTIA = self.MASS * self.RADIUS**2
         self.torque_history = LinkedList()
 
-        self.angular_velocity = 2 # fix to start properly later, but have this here so the engine actually starts
+        self.angular_velocity = 0
         self.angle_radians = 0
         self.instantenous_torque = 0
  

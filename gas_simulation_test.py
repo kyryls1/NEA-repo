@@ -9,8 +9,8 @@ class GasSimulation():
     def __init__(self, crank_radius, connector_rod_length, deck_clearance):
         self.combustion_temperature = 2273
         self.ambient_temperature = 623
-        self.moles_after_combustion = 9/76 * 5
-        self.moles_before_combustion = 17/114 * 5
+        self.moles_after_combustion = 0
+        self.moles_before_combustion = 0
         self.temperature_difference = self.combustion_temperature - self.ambient_temperature
         self.moles_difference = self.moles_after_combustion - self.moles_before_combustion
         self.cylinder_head_position = Vector(0, crank_radius + connector_rod_length + deck_clearance)

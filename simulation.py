@@ -15,8 +15,6 @@ class GasSimulation():
     def update_fuel_flow_rate(self, mass_flow_rate):
         self.moles_before_combustion = mass_flow_rate * 9/76
         self.moles_after_combustion = mass_flow_rate * 17/114
-        print(self.moles_before_combustion)
-        print(self.moles_after_combustion)
 
     def get_temperature(self, theta):
         if 0 <= theta < 0.1:
@@ -38,8 +36,6 @@ class GasSimulation():
             multiplier = (theta - 5.2) / (2*math.pi - 5.2)
             increase_amplitude = 0.03 * (self.moles_difference)
             return self.moles_before_combustion + increase_amplitude * math.sin(multiplier * math.pi/2)
-        
-        #return self.moles_before_combustion + (self.moles_after_combustion - self.moles_before_combustion) * (1 + math.sin(theta)) / 2
 
     def get_current_deck_clearance(self, piston_position):
         return self.cylinder_head_position.y - piston_position.y

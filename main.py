@@ -63,7 +63,7 @@ class SimulationWindow(pyglet.window.Window):
             widgets.Button("Set Parameters", ui_start_x + button_width + button_spacing, buttons_y, 
                    button_width, button_height, self.start_simulation_button, self.static_batch),
             widgets.Button("Starter", ui_start_x + 2 * (button_width + button_spacing), buttons_y, 
-                   button_width, button_height, self.ignition_starter, self.static_batch),
+                   button_width, button_height, self.ignition_starter_button, self.static_batch),
             widgets.Button("Save Configuration", ui_start_x, buttons_y - button_height - button_spacing, 
                    button_width, button_height, self.save_config_button, self.static_batch),
             widgets.Button("Load Configuration", ui_start_x + button_width + button_spacing, 
@@ -90,6 +90,8 @@ class SimulationWindow(pyglet.window.Window):
             scaled_dt = dt * self.simulation_speed_factor
             self.simulation.update_all(scaled_dt)
             self.renderer.render(self.simulation.crank, self.simulation.connector_rod, self.simulation.piston)
+            if self.simulation.crank.angular_velocity < 0:
+                print("Stall")
 
     def sample_graph_point(self, _dt):
         if self.simulation_paused is True: 
@@ -97,7 +99,6 @@ class SimulationWindow(pyglet.window.Window):
         current_time = (time.perf_counter() - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor
         torque = round(self.simulation.crank.instantenous_torque, 6)
         rpm = round(self.simulation.crank.get_rpm(), 6)
-        print(rpm)
         self.renderer.store_graph_point(current_time, torque, rpm)
 
     def update_fuel_flow_rate(self, fuel_flow_rate):
@@ -140,7 +141,7 @@ class SimulationWindow(pyglet.window.Window):
         cursor.execute('''
                 CREATE TABLE IF NOT EXISTS engine_designs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    configuration_name TEXT,
+                    configuration_name VARCHAR(40),
                     crank_radius REAL,
                     crank_mass REAL,
                     rod_length REAL,
@@ -215,7 +216,7 @@ class SimulationWindow(pyglet.window.Window):
         if focused_row is not None:
             focused_row_id = focused_row[0]
             if focused_row_id == self.last_save_id:
-                self.button_widgets[2].label.text = "Save Parameters"
+                self.button_widgets[3].label.text = "Save Configuration"
             self.renderer.close_plot(focused_row_id)
             self.delete_record(cursor, focused_row_id)
             conn.commit()
@@ -288,7 +289,7 @@ class SimulationWindow(pyglet.window.Window):
         paused_points = self.load_paused_points(engine_design_id)
         throttle_changes = self.load_throttle_change_points(engine_design_id)
         times, torques, angular_velocities = zip(*data_points)
-        self.renderer.plot_performance(times, torques, angular_velocities, paused_points, throttle_changes, engine_design_id, selected_record[1:])
+        self.renderer.plot_performance(times, torques, angular_velocities, paused_points, throttle_changes, selected_record[1:], engine_design_id)
 
     def start_simulation_button(self):
         inputs = [widget.document.text for widget in self.parameter_input_widgets[1:9]] #include only numerical config inputs
@@ -319,7 +320,7 @@ class SimulationWindow(pyglet.window.Window):
                                  renderer_parameters[4], renderer_parameters[5])
         self.start_time = time.perf_counter()
         self.elapsed_pause_time = 0
-        self.button_widgets[2].label.text = "Save Parameters"
+        self.button_widgets[3].label.text = "Save Configuration"
         self.simulation_paused = False
 
     def toggle_simulation_pause_button(self):
@@ -336,9 +337,19 @@ class SimulationWindow(pyglet.window.Window):
                 self.elapsed_pause_time += time_resumed - self.time_paused
                 self.renderer.close_plot(0)
 
-    def ignition_starter(self):
-        if hasattr(self, 'simulation'):
-            self.simulation.crank.angular_velocity += 1500
+    def ignition_starter_button(self):
+        if hasattr(self, 'simulation') and self.simulation_paused is False:
+            if abs(self.simulation.crank.angular_velocity) < 1:  # Only start if engine is relatively slow/stopped
+                pyglet.clock.schedule_interval(self.starter, 0.01)
+                pyglet.clock.schedule_once(self.starter_cutout, 0.5)
+
+    def starter_cutout(self, _dt):
+        pyglet.clock.unschedule(self.starter)
+
+    def starter(self, _dt):
+        starting_torque = 50 
+        self.simulation.crank.update_angular_velocity(starting_torque, _dt * self.simulation_speed_factor)
+        print(f"Starter applied, current RPM: {self.simulation.crank.get_rpm()}")
 
     def mm_to_m(self, value):
         return value / 1000.0
@@ -438,7 +449,7 @@ class SimulationWindow(pyglet.window.Window):
             else:
                 if text == " " and self.focused_widget.document.text == "":
                     return
-                elif len(self.focused_widget.document.text) >= 20:
+                elif len(self.focused_widget.document.text) >= 40:
                     return
             
             self.focused_widget.caret.on_text(text)
@@ -471,10 +482,6 @@ class SimulationWindow(pyglet.window.Window):
 if __name__ == "__main__":
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
-    cursor.execute("DROP TABLE IF EXISTS engine_designs")
-    cursor.execute("DROP TABLE IF EXISTS engine_performance_data")
-    cursor.execute("DROP TABLE IF EXISTS paused_points")
-    cursor.execute("DROP TABLE IF EXISTS throttle_change_points")
     conn.commit()
     conn.close()
     simulation = SimulationWindow(width=1280, height=900, resizable=False, caption="Piston Engine Simulation", vsync=False)
