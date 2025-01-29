@@ -86,12 +86,123 @@ class SimulationWindow(pyglet.window.Window):
         self.list_box = widgets.ListBox(self.get_engine_design_entries(), x=list_x, y=list_y, 
                                         width=button_width * 2 + button_spacing, height=200, batch=self.static_batch)
 
+    # UI/Widget Initialization functions
+    def focus_widget(self, widget):
+        if self.is_focused_widget_set():
+            self.focused_widget.clear_focus()
+        widget.set_focus()
+        self.focused_widget = widget
+        
+    def cycle_focus(self, direction):
+        if self.is_focused_widget_set():
+            index = self.parameter_input_widgets.index(self.focused_widget)
+            new_index = (index + direction) % len(self.parameter_input_widgets)
+            if new_index == 0:
+                new_index = 1
+        else:
+            new_index = 1
+
+        self.focus_widget(self.parameter_input_widgets[new_index])
+
+    def is_focused_widget_set(self):
+        return self.focused_widget is not None
+
+    # Event Handling functions
     def on_draw(self):
         self.clear()
         self.static_batch.draw()
         self.fps_display.draw()
         self.simulation_batch.draw()
 
+    def on_mouse_motion(self, x, y, _dx, _dy):
+        for widget in self.parameter_input_widgets:
+            if widget.is_mouseover(x, y):
+                self.set_mouse_cursor(self.text_cursor)
+                break
+        else:
+            self.set_mouse_cursor(None)
+            for button_widget in self.button_widgets:
+                button_widget.set_hover(x, y)
+            else:
+                self.list_box.on_mouse_motion(x, y)
+    
+    def on_mouse_scroll(self, x, y, scroll_x, scroll_y):
+        self.list_box.on_mouse_scroll(x, y, scroll_x, scroll_y)
+
+    def on_mouse_press(self, x, y, button, modifiers):
+        if button == pyglet.window.mouse.LEFT:
+            for button_widget in self.button_widgets:
+                if button_widget.is_mouseover(x, y):
+                    button_widget.on_click()
+                    break
+
+            selected_data = self.list_box.on_mouse_press(x, y)
+            if selected_data:
+                self.load_plot(selected_data)
+
+            for widget in self.parameter_input_widgets:
+                if widget.is_mouseover(x, y):
+                    if self.focused_widget == widget:
+                        break
+                    else:
+                        self.focus_widget(widget)
+                        break
+            else:
+                if self.is_focused_widget_set():
+                    self.focused_widget.clear_focus()
+                    self.focused_widget = None
+
+            if self.is_focused_widget_set():
+                self.focused_widget.caret.on_mouse_press(x, y, button_widget, modifiers)
+
+    def on_mouse_drag(self, x, y, dx, dy, buttons, modifiers):
+        if self.is_focused_widget_set():
+            self.focused_widget.caret.on_mouse_drag(x, y, dx, dy, buttons, modifiers)
+
+    def on_text(self, text):
+        if text in ("\r", "\n"):
+            return
+        if self.is_focused_widget_set():
+            if self.focused_widget is not self.parameter_input_widgets[10]:
+                allowed_chars = "0123456789."
+                if text not in allowed_chars:
+                    return
+                if text == "." and "." in self.focused_widget.document.text:
+                    return
+            else:
+                if text == " " and self.focused_widget.document.text == "":
+                    return
+                elif len(self.focused_widget.document.text) >= 40:
+                    return
+            
+            self.focused_widget.caret.on_text(text)
+
+    def on_text_motion(self, motion):
+        if self.is_focused_widget_set():
+            self.focused_widget.caret.on_text_motion(motion)
+
+    def on_text_motion_select(self, motion):
+        if self.is_focused_widget_set():
+            self.focused_widget.caret.on_text_motion_select(motion)
+
+    def on_key_press(self, symbol, modifiers):
+        if symbol == pyglet.window.key.P:
+            self.toggle_simulation_pause_button()
+
+        if symbol == pyglet.window.key.TAB:
+            direction = -1 if (modifiers & pyglet.window.key.MOD_SHIFT) else 1
+            self.cycle_focus(direction)
+
+        elif symbol == pyglet.window.key.ENTER:
+            if self.is_focused_widget_set():
+                if self.focused_widget is self.parameter_input_widgets[0]:
+                    self.update_fuel_flow_rate(float(self.focused_widget.document.text))
+                elif self.focused_widget is self.parameter_input_widgets[1]:
+                    self.update_engine_load(float(self.focused_widget.document.text))
+                
+                self.cycle_focus(1)
+
+    # Simulation Control functions
     def update_simulation(self, dt):
         if not self.simulation_paused and not self.engine_stalled:
             scaled_dt = dt * self.simulation_speed_factor
@@ -117,6 +228,69 @@ class SimulationWindow(pyglet.window.Window):
         rpm = round(self.simulation.crank.get_rpm(), 6)
         self.renderer.store_graph_point(current_time, torque, rpm)
 
+    def start_simulation(self, simulation_parameters, origin):
+        for i, input in enumerate(simulation_parameters):
+            self.parameter_input_widgets[i+2].set_current_value(input)
+            self.parameter_input_widgets[i+2].document.text = ""
+
+        self.parameter_input_widgets[0].set_current_value(None)
+        self.parameter_input_widgets[1].set_current_value(None)
+
+        self.renderer.close_plot(0)
+        self.renderer_parameters = simulation_parameters.copy()   
+        self.simulation_batch = pyglet.graphics.Batch()
+        # [0]=crank_radius, [2]=rod_length, [4]=piston_radius, [5]=piston_length, [7]=deck_clearance
+        for i in [0, 2, 4, 5, 7]:
+            simulation_parameters[i] = self.mm_to_m(simulation_parameters[i])
+
+        self.simulation = Simulation(*simulation_parameters)
+        self.renderer = Renderer(self.simulation_batch, origin, 
+                                 simulation_parameters[0], simulation_parameters[2], 
+                                 simulation_parameters[4], simulation_parameters[5])
+        self.start_time = time.perf_counter()
+        self.elapsed_pause_time = 0
+        self.button_widgets[3].label.text = "Save Configuration"
+        self.simulation_paused = False
+        self.engine_stalled = True
+
+    def start_simulation_button(self):
+        inputs = [widget.document.text for widget in self.parameter_input_widgets[2:10]]
+        if "" in inputs: 
+            return
+        parameters = list(map(float, inputs))
+        if 0 in parameters:
+            print("Parameters cannot be zero")
+            return
+        elif parameters[2] <= parameters[0]:
+            print("Connector Rod Length cannot be smaller than Crank Radius")
+            return
+                     
+        self.start_simulation(parameters, self.origin)
+
+    def toggle_simulation_pause_button(self):
+        if hasattr(self, 'simulation'):
+            self.simulation_paused = not self.simulation_paused
+            if self.simulation_paused:
+                self.time_paused = time.perf_counter()
+                current_time = (self.time_paused - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor
+                self.renderer.store_paused_point(current_time)
+                named_parameters = ["Active Configuration"] + self.renderer_parameters
+                self.renderer.plot_active_configuration(named_parameters)
+            else:
+                time_resumed = time.perf_counter()
+                self.elapsed_pause_time += time_resumed - self.time_paused
+                self.renderer.close_plot(0)
+
+    def ignition_starter_button(self):
+        if hasattr(self, 'simulation') and self.simulation_paused is False:
+            if self.engine_stalled:
+                self.engine_stalled = False
+                self.simulation.toggle_starter_motor()
+                pyglet.clock.schedule_once(self.starter_cutout, 3)
+
+    def starter_cutout(self, _dt):
+        self.simulation.toggle_starter_motor()
+
     def update_fuel_flow_rate(self, fuel_flow_rate):
         if hasattr(self, 'simulation') and fuel_flow_rate != "":
             self.simulation.update_fuel_flow_rate(fuel_flow_rate)
@@ -131,6 +305,7 @@ class SimulationWindow(pyglet.window.Window):
             self.parameter_input_widgets[1].set_current_value(engine_load)
             self.parameter_input_widgets[1].document.text = ""
 
+    # Database Operations functions
     def save_config_button(self):
         if hasattr(self, 'renderer_parameters'): 
             configuration_name = self.parameter_input_widgets[10].document.text
@@ -316,72 +491,6 @@ class SimulationWindow(pyglet.window.Window):
         times, torques, angular_velocities = zip(*data_points)
         self.renderer.plot_performance(times, torques, angular_velocities, paused_points, throttle_changes, selected_record[1:], engine_design_id)
 
-    def start_simulation_button(self):
-        inputs = [widget.document.text for widget in self.parameter_input_widgets[2:10]]
-        if "" in inputs: 
-            return
-        parameters = list(map(float, inputs))
-        if 0 in parameters:
-            print("Parameters cannot be zero")
-            return
-        elif parameters[2] <= parameters[0]:
-            print("Connector Rod Length cannot be smaller than Crank Radius")
-            return
-                     
-        self.start_simulation(parameters, self.origin)
-
-    def start_simulation(self, simulation_parameters, origin):
-        for i, input in enumerate(simulation_parameters):
-            self.parameter_input_widgets[i+2].set_current_value(input)
-            self.parameter_input_widgets[i+2].document.text = ""
-
-        self.parameter_input_widgets[0].set_current_value(None)
-        self.parameter_input_widgets[1].set_current_value(None)
-
-        self.renderer.close_plot(0)
-        self.renderer_parameters = simulation_parameters.copy()   
-        self.simulation_batch = pyglet.graphics.Batch()
-        # [0]=crank_radius, [2]=rod_length, [4]=piston_radius, [5]=piston_length, [7]=deck_clearance
-        for i in [0, 2, 4, 5, 7]:
-            simulation_parameters[i] = self.mm_to_m(simulation_parameters[i])
-
-        self.simulation = Simulation(*simulation_parameters)
-        self.renderer = Renderer(self.simulation_batch, origin, 
-                                 simulation_parameters[0], simulation_parameters[2], 
-                                 simulation_parameters[4], simulation_parameters[5])
-        self.start_time = time.perf_counter()
-        self.elapsed_pause_time = 0
-        self.button_widgets[3].label.text = "Save Configuration"
-        self.simulation_paused = False
-        self.engine_stalled = True
-
-    def toggle_simulation_pause_button(self):
-        if hasattr(self, 'simulation'):
-            self.simulation_paused = not self.simulation_paused
-            if self.simulation_paused:
-                self.time_paused = time.perf_counter()
-                current_time = (self.time_paused - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor
-                self.renderer.store_paused_point(current_time)
-                named_parameters = ["Active Configuration"] + self.renderer_parameters
-                self.renderer.plot_active_configuration(named_parameters)
-            else:
-                time_resumed = time.perf_counter()
-                self.elapsed_pause_time += time_resumed - self.time_paused
-                self.renderer.close_plot(0)
-
-    def ignition_starter_button(self):
-        if hasattr(self, 'simulation') and self.simulation_paused is False:
-            if self.engine_stalled:
-                self.engine_stalled = False
-                self.simulation.toggle_starter_motor()
-                pyglet.clock.schedule_once(self.starter_cutout, 3)
-
-    def starter_cutout(self, _dt):
-        self.simulation.toggle_starter_motor()
-
-    def mm_to_m(self, value):
-        return value / 1000.0
-
     def get_database_entries(self):
         conn = sqlite3.connect('database.db')
         cursor = conn.cursor()
@@ -395,113 +504,9 @@ class SimulationWindow(pyglet.window.Window):
             conn.close()
             return []
 
-    def is_focused_widget_set(self):
-        return self.focused_widget is not None
-
-    def focus_widget(self, widget):
-        if self.is_focused_widget_set():
-            self.focused_widget.clear_focus()
-        widget.set_focus()
-        self.focused_widget = widget
-        
-    def cycle_focus(self, direction):
-        if self.is_focused_widget_set():
-            index = self.parameter_input_widgets.index(self.focused_widget)
-            new_index = (index + direction) % len(self.parameter_input_widgets)
-            if new_index == 0:
-                new_index = 1
-        else:
-            new_index = 1
-
-        self.focus_widget(self.parameter_input_widgets[new_index])
-
-    def on_mouse_motion(self, x, y, _dx, _dy):
-        for widget in self.parameter_input_widgets:
-            if widget.is_mouseover(x, y):
-                self.set_mouse_cursor(self.text_cursor)
-                break
-        else:
-            self.set_mouse_cursor(None)
-            for button_widget in self.button_widgets:
-                button_widget.set_hover(x, y)
-            else:
-                self.list_box.on_mouse_motion(x, y)
-    
-    def on_mouse_scroll(self, x, y, scroll_x, scroll_y):
-        self.list_box.on_mouse_scroll(x, y, scroll_x, scroll_y)
-
-    def on_mouse_press(self, x, y, button, modifiers):
-        if button == pyglet.window.mouse.LEFT:
-            for button_widget in self.button_widgets:
-                if button_widget.is_mouseover(x, y):
-                    button_widget.on_click()
-                    break
-
-            selected_data = self.list_box.on_mouse_press(x, y)
-            if selected_data:
-                self.load_plot(selected_data)
-
-            for widget in self.parameter_input_widgets:
-                if widget.is_mouseover(x, y):
-                    if self.focused_widget == widget:
-                        break
-                    else:
-                        self.focus_widget(widget)
-                        break
-            else:
-                if self.is_focused_widget_set():
-                    self.focused_widget.clear_focus()
-                    self.focused_widget = None
-
-            if self.is_focused_widget_set():
-                self.focused_widget.caret.on_mouse_press(x, y, button_widget, modifiers)
-
-    def on_mouse_drag(self, x, y, dx, dy, buttons, modifiers):
-        if self.is_focused_widget_set():
-            self.focused_widget.caret.on_mouse_drag(x, y, dx, dy, buttons, modifiers)
-
-    def on_text(self, text):
-        if text in ("\r", "\n"):
-            return
-        if self.is_focused_widget_set():
-            if self.focused_widget is not self.parameter_input_widgets[10]:
-                allowed_chars = "0123456789."
-                if text not in allowed_chars:
-                    return
-                if text == "." and "." in self.focused_widget.document.text:
-                    return
-            else:
-                if text == " " and self.focused_widget.document.text == "":
-                    return
-                elif len(self.focused_widget.document.text) >= 40:
-                    return
-            
-            self.focused_widget.caret.on_text(text)
-
-    def on_text_motion(self, motion):
-        if self.is_focused_widget_set():
-            self.focused_widget.caret.on_text_motion(motion)
-
-    def on_text_motion_select(self, motion):
-        if self.is_focused_widget_set():
-            self.focused_widget.caret.on_text_motion_select(motion)
-
-    def on_key_press(self, symbol, modifiers):
-        if symbol == pyglet.window.key.P:
-            self.toggle_simulation_pause_button()
-
-        if symbol == pyglet.window.key.TAB:
-            direction = -1 if (modifiers & pyglet.window.key.MOD_SHIFT) else 1
-            self.cycle_focus(direction)
-
-        elif symbol == pyglet.window.key.ENTER:
-            if self.is_focused_widget_set():
-                if self.focused_widget is self.parameter_input_widgets[0]:
-                    self.update_fuel_flow_rate(float(self.focused_widget.document.text))
-                elif self.focused_widget is self.parameter_input_widgets[1]:
-                    self.update_engine_load(float(self.focused_widget.document.text))
-                
-                self.cycle_focus(1)
+    # Utility functions
+    def mm_to_m(self, value):
+        return value / 1000.0
 
 if __name__ == "__main__":
     conn = sqlite3.connect('database.db')

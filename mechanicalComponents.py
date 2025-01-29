@@ -90,12 +90,12 @@ class Piston():
         self.MASS = mass
         self.LENGTH = length
         self.DECK_CLEARANCE = deck_clearance
+        self.SURFACE_AREA = 2 * math.pi * self.RADIUS * self.LENGTH
         self.position = Vector(0, rod_offset)
         self.last_position = Vector(0, rod_offset)
 
         self.velocity = 0
         self.previous_velocity = 0
-        self.surface_area = 2 * math.pi * self.RADIUS * self.LENGTH
 
     def update_velocity(self, dt):
         dy = (self.position.y - self.last_position.y)

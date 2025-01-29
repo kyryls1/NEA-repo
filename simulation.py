@@ -62,7 +62,13 @@ class Simulation():
         self.connector_rod = mechanicalComponents.ConnectorRod(rod_mass, connector_rod_length, crank_radius)
         self.gas_simulation = GasSimulation(crank_radius, connector_rod_length, deck_clearance)
 
-        self.component_weight = (rod_mass + piston_mass) * 9.81
+        self.film_thickness = 3e-6 
+        self.dynamic_viscosity = 0.01
+        self.piston_ring_gradient_coefficient = -2.5
+        self.piston_skirt_gradient_coefficient = -2.1
+        self.PISTON_RING_AREA = 2 * (2 * math.pi * self.piston.RADIUS * 0.002)
+        self.PISTON_SKIRT_AREA = self.piston.SURFACE_AREA - self.PISTON_RING_AREA
+        self.COMPONENT_WEIGHT = (rod_mass + piston_mass) * 9.81
 
     def toggle_starter_motor(self):
         self.crank.starter_motor_on = not self.crank.starter_motor_on
@@ -76,7 +82,7 @@ class Simulation():
     def update_all(self, dt):
         gas_force = self.gas_simulation.calculate_force(self.crank.angle_radians, self.piston.position)
         friction_force = self.calculate_friction()
-        total_force = gas_force + self.component_weight + friction_force
+        total_force = gas_force + self.COMPONENT_WEIGHT - friction_force
         rod_direction_vector = self.find_rod_direction_vector()
         force_parallel_to_rod = self.transfer_force_to_rod(total_force, rod_direction_vector)
         force_tangent_to_crank = self.transfer_force_to_crank(force_parallel_to_rod, rod_direction_vector)
@@ -85,32 +91,22 @@ class Simulation():
         self.connector_rod.update(self.crank.calculate_delta_theta(dt))
         self.piston.update(self.connector_rod.rod_end.y, dt)
 
-    def calculate_velocity_gradient(self, velocity, film_thickness):
-        return -8 * velocity / film_thickness
+    def calculate_velocity_gradient(self, velocity, film_thickness, gradient_coefficient):
+        return gradient_coefficient * velocity / film_thickness**2
 
-    def calculate_pressure_gradient(self, dynamic_viscosity, film_thickness):
-        velocity_gradient = self.calculate_velocity_gradient(self.piston.velocity, film_thickness)
+    def calculate_pressure_gradient(self, dynamic_viscosity, film_thickness, gradient_coefficient):
+        velocity_gradient = self.calculate_velocity_gradient(self.piston.velocity, film_thickness, gradient_coefficient)
         return dynamic_viscosity * velocity_gradient
 
     def calculate_friction(self):
-        film_thickness = 3e-6 
-        dynamic_viscosity = 0.01
-        pressure_gradient = self.calculate_pressure_gradient(dynamic_viscosity, film_thickness)
-        shear_stress = 0.5 * film_thickness * pressure_gradient + dynamic_viscosity * self.piston.velocity / film_thickness
+        ring_pressure_gradient = self.calculate_pressure_gradient(self.dynamic_viscosity, self.film_thickness, self.piston_ring_gradient_coefficient)
+        ring_shear_stress = 0.5 * self.film_thickness * ring_pressure_gradient + self.dynamic_viscosity * self.piston.velocity / self.film_thickness
+        ring_friction = ring_shear_stress * self.PISTON_RING_AREA
+        skirt_pressure_gradient = self.calculate_pressure_gradient(self.dynamic_viscosity, self.film_thickness, self.piston_skirt_gradient_coefficient)
+        skirt_shear_stress = 0.5 * self.film_thickness * skirt_pressure_gradient + self.dynamic_viscosity * self.piston.velocity / self.film_thickness
+        skirt_friction = skirt_shear_stress * self.PISTON_SKIRT_AREA
 
-        ring_contact_width = 0.002
-        ring_friction_coefficient = 0.15
-        skirt_friction_coefficient = 0.05
-
-        ring_area = 2 * (2 * math.pi * self.piston.RADIUS * ring_contact_width)
-
-        skirt_area = self.piston.surface_area - ring_area
-
-        ring_friction = shear_stress * ring_area * ring_friction_coefficient
-        skirt_friction = shear_stress * skirt_area * skirt_friction_coefficient
-
-        total_friction = ring_friction + skirt_friction
-        return total_friction
+        return ring_friction + skirt_friction
 
     def find_normal_to_crank_motion(self, theta):
         if theta == math.pi/2:
