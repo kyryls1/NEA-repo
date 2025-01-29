@@ -5,11 +5,11 @@ from renderer import Renderer
 from simulation import Simulation
 import sqlite3
 import widgets
-import math
 
 class SimulationWindow(pyglet.window.Window):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.maximize()
         self.static_batch = pyglet.graphics.Batch()
         self.simulation_batch = pyglet.graphics.Batch()
         self.renderer = Renderer(self.simulation_batch, Vector(0, 0), 0, 0, 0, 0)
@@ -22,42 +22,43 @@ class SimulationWindow(pyglet.window.Window):
 
         simulation_area_width = 600
         ui_start_x = simulation_area_width + 100
-        ui_start_y = 750
+        ui_start_y = self.height - 50
         ui_spacing = 40
         textbox_width = 100
 
         self.labels = [
-            pyglet.text.Label("Fuel Flow Rate", x=ui_start_x, y=ui_start_y,
+            pyglet.text.Label("Live Parameters", x=ui_start_x, y=ui_start_y,
                               color=(255, 255, 255, 255), batch=self.static_batch),
-            pyglet.text.Label("Crank", x=ui_start_x, y=ui_start_y - 2 * ui_spacing,
+            pyglet.text.Label("Crank", x=ui_start_x, y=ui_start_y - 3 * ui_spacing,  # Shifted down
                               color=(255, 255, 255, 255), batch=self.static_batch),
-            pyglet.text.Label("Connecting Rod", x=ui_start_x, y=ui_start_y - 5 * ui_spacing,
+            pyglet.text.Label("Connecting Rod", x=ui_start_x, y=ui_start_y - 6 * ui_spacing,  # Shifted down
                               color=(255, 255, 255, 255), batch=self.static_batch),
-            pyglet.text.Label("Piston", x=ui_start_x, y=ui_start_y - 8 * ui_spacing,
+            pyglet.text.Label("Piston", x=ui_start_x, y=ui_start_y - 9 * ui_spacing,  # Shifted down
                               color=(255, 255, 255, 255), batch=self.static_batch),
-            pyglet.text.Label("Manage Saves", x=ui_start_x, y=ui_start_y - 13 * ui_spacing,
+            pyglet.text.Label("Manage Saves", x=ui_start_x, y=ui_start_y - 14 * ui_spacing,  # Shifted down
                               color=(255, 255, 255, 255), batch=self.static_batch)
         ]
 
         self.parameter_input_widgets = [
-            #Fuel Flow Rate
+            #Live Parameters
             widgets.TextBox("Fuel injected per cycle (g):", ui_start_x, ui_start_y - ui_spacing, textbox_width, self.static_batch),
+            widgets.TextBox("Engine load (W):", ui_start_x, ui_start_y - 2 * ui_spacing, textbox_width, self.static_batch),
             # Crank
-            widgets.TextBox("Radius (mm):", ui_start_x, ui_start_y - 3 * ui_spacing, textbox_width, self.static_batch),
-            widgets.TextBox("Mass (kg):", ui_start_x, ui_start_y - 4 * ui_spacing, textbox_width, self.static_batch),
+            widgets.TextBox("Radius (mm):", ui_start_x, ui_start_y - 4 * ui_spacing, textbox_width, self.static_batch),
+            widgets.TextBox("Mass (kg):", ui_start_x, ui_start_y - 5 * ui_spacing, textbox_width, self.static_batch),
             # Connecting Rod
-            widgets.TextBox("Length (mm):", ui_start_x, ui_start_y - 6 * ui_spacing, textbox_width, self.static_batch),
-            widgets.TextBox("Mass (kg):", ui_start_x, ui_start_y - 7 * ui_spacing, textbox_width, self.static_batch),
+            widgets.TextBox("Length (mm):", ui_start_x, ui_start_y - 7 * ui_spacing, textbox_width, self.static_batch),
+            widgets.TextBox("Mass (kg):", ui_start_x, ui_start_y - 8 * ui_spacing, textbox_width, self.static_batch),
             # Piston
-            widgets.TextBox("Radius (mm):", ui_start_x, ui_start_y - 9 * ui_spacing, textbox_width, self.static_batch),
-            widgets.TextBox("Length (mm):", ui_start_x, ui_start_y - 10 * ui_spacing, textbox_width, self.static_batch), 
-            widgets.TextBox("Mass (kg):", ui_start_x, ui_start_y - 11 * ui_spacing, textbox_width, self.static_batch),
-            widgets.TextBox("Deck Clearance (mm):", ui_start_x, ui_start_y - 12 * ui_spacing, textbox_width, self.static_batch),
+            widgets.TextBox("Radius (mm):", ui_start_x, ui_start_y - 10 * ui_spacing, textbox_width, self.static_batch),
+            widgets.TextBox("Length (mm):", ui_start_x, ui_start_y - 11 * ui_spacing, textbox_width, self.static_batch), 
+            widgets.TextBox("Mass (kg):", ui_start_x, ui_start_y - 12 * ui_spacing, textbox_width, self.static_batch),
+            widgets.TextBox("Deck Clearance (mm):", ui_start_x, ui_start_y - 13 * ui_spacing, textbox_width, self.static_batch),
             #Manage Saves
-            widgets.TextBox("Configuration Name:", ui_start_x, ui_start_y - 14 * ui_spacing, textbox_width, self.static_batch)
+            widgets.TextBox("Configuration Name:", ui_start_x, ui_start_y - 15 * ui_spacing, textbox_width, self.static_batch)
         ]
 
-        buttons_y = ui_start_y - 15 * ui_spacing - 20
+        buttons_y = ui_start_y - 17 * ui_spacing
         button_width = 180
         button_height = 50
         button_spacing = 20
@@ -104,7 +105,7 @@ class SimulationWindow(pyglet.window.Window):
             if self.simulation.crank.angular_velocity < 0:
                 print("Stall")
                 self.simulation.crank.angular_velocity = 0
-                self.engine_stalled = True  # Set stalled state
+                self.engine_stalled = True
 
     def sample_graph_point(self, _dt):
         if self.simulation_paused is True: 
@@ -119,10 +120,18 @@ class SimulationWindow(pyglet.window.Window):
             self.simulation.update_fuel_flow_rate(fuel_flow_rate)
             current_time = (time.perf_counter() - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor
             self.renderer.store_throttle_change_point(current_time, fuel_flow_rate)
+            self.parameter_input_widgets[0].set_current_value(fuel_flow_rate)
+            self.parameter_input_widgets[0].document.text = ""
+
+    def update_engine_load(self, engine_load):
+        if hasattr(self, 'simulation') and engine_load != "":
+            self.simulation.update_engine_load(engine_load)
+            self.parameter_input_widgets[1].set_current_value(engine_load)
+            self.parameter_input_widgets[1].document.text = ""
 
     def save_config_button(self):
         if hasattr(self, 'renderer_parameters'): 
-            configuration_name = self.parameter_input_widgets[9].document.text
+            configuration_name = self.parameter_input_widgets[10].document.text
             if configuration_name:
                 conn = sqlite3.connect('database.db')
                 cursor = conn.cursor()
@@ -143,7 +152,7 @@ class SimulationWindow(pyglet.window.Window):
                 conn.close()
 
                 self.list_box.update_table(self.get_engine_design_entries())
-                self.parameter_input_widgets[8].document.text = ""
+                self.parameter_input_widgets[10].document.text = ""
 
     def load_config_button(self):
         parameters = list(self.list_box.get_focused_data())
@@ -305,7 +314,7 @@ class SimulationWindow(pyglet.window.Window):
         self.renderer.plot_performance(times, torques, angular_velocities, paused_points, throttle_changes, selected_record[1:], engine_design_id)
 
     def start_simulation_button(self):
-        inputs = [widget.document.text for widget in self.parameter_input_widgets[1:9]] #include only numerical config inputs
+        inputs = [widget.document.text for widget in self.parameter_input_widgets[2:10]]  # Updated range
         if "" in inputs: 
             return
         parameters = list(map(float, inputs))
@@ -317,24 +326,28 @@ class SimulationWindow(pyglet.window.Window):
             return
             
         self.renderer_parameters = parameters.copy()
+        for i, input in enumerate(parameters):
+            self.parameter_input_widgets[i+2].set_current_value(input)
+            self.parameter_input_widgets[i+2].document.text = ""
+            
         self.start_simulation(parameters, self.origin)
 
     def start_simulation(self, simulation_parameters, origin):
         self.renderer.close_plot(0)
         self.simulation_batch = pyglet.graphics.Batch()
         # [0]=crank_radius, [2]=rod_length, [4]=piston_radius, [5]=piston_length, [7]=deck_clearance
-        renderer_parameters = simulation_parameters.copy()
         for i in [0, 2, 4, 5, 7]:
             simulation_parameters[i] = self.mm_to_m(simulation_parameters[i])
 
         self.simulation = Simulation(*simulation_parameters)
         self.renderer = Renderer(self.simulation_batch, origin, 
-                                 renderer_parameters[0], renderer_parameters[2], 
-                                 renderer_parameters[4], renderer_parameters[5])
+                                 simulation_parameters[0], simulation_parameters[2], 
+                                 simulation_parameters[4], simulation_parameters[5])
         self.start_time = time.perf_counter()
         self.elapsed_pause_time = 0
         self.button_widgets[3].label.text = "Save Configuration"
         self.simulation_paused = False
+        self.engine_stalled = True
 
     def toggle_simulation_pause_button(self):
         if hasattr(self, 'simulation'):
@@ -359,17 +372,14 @@ class SimulationWindow(pyglet.window.Window):
     def starter_cutout(self, _dt):
         pyglet.clock.unschedule(self.starter)
 
-    def starter(self, _dt):
-        starting_force = 50
-        self.simulation.crank.update_angular_velocity(starting_force, _dt * self.simulation_speed_factor)
+    def starter(self, dt):
+        starting_force = 5
+        self.simulation.crank.update_angular_velocity(starting_force, dt * self.simulation_speed_factor)
         print(f"Starter applied, current RPM: {self.simulation.crank.get_rpm()}")
         self.engine_stalled = False
 
     def mm_to_m(self, value):
         return value / 1000.0
-
-    def m_to_mm(self, value):
-        return value * 1000.0
 
     def get_database_entries(self):
         conn = sqlite3.connect('database.db')
@@ -454,7 +464,7 @@ class SimulationWindow(pyglet.window.Window):
         if text in ("\r", "\n"):
             return
         if self.is_focused_widget_set():
-            if self.focused_widget is not self.parameter_input_widgets[9]:
+            if self.focused_widget is not self.parameter_input_widgets[10]:
                 allowed_chars = "0123456789."
                 if text not in allowed_chars:
                     return
@@ -488,17 +498,17 @@ class SimulationWindow(pyglet.window.Window):
             if self.is_focused_widget_set():
                 if self.focused_widget is self.parameter_input_widgets[0]:
                     self.update_fuel_flow_rate(float(self.focused_widget.document.text))
-                    self.focused_widget.clear_focus()
-                    self.focused_widget = None
-                else:
-                    self.cycle_focus(1)
+                elif self.focused_widget is self.parameter_input_widgets[1]:
+                    self.update_engine_load(float(self.focused_widget.document.text))
+                
+                self.cycle_focus(1)
 
 if __name__ == "__main__":
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
     conn.commit()
     conn.close()
-    simulation = SimulationWindow(width=1280, height=900, resizable=False, caption="Piston Engine Simulation", vsync=False)
+    simulation = SimulationWindow(width=1280, height=900, resizable=True, caption="Piston Engine Simulation", vsync=False)
     pyglet.clock.schedule_interval(simulation.update_simulation, 1/3000) 
     pyglet.clock.schedule_interval(simulation.sample_graph_point, 1/1000)
     #pyglet.options['com_mta'] = True

@@ -162,6 +162,15 @@ class TextBox:
 
         padding = 2
         self.textbox_background = pyglet.shapes.Rectangle(x - padding, y - padding, width + padding, height + padding, color=(200, 200, 220), batch=batch)
+        
+        self.current_value_label = pyglet.text.Label("", x=x + width + 10, y=y, anchor_x='left', anchor_y='bottom', 
+                                            color=(150, 150, 150, 255), batch=batch)
+    
+    def set_current_value(self, value):
+        if value is not None:
+            self.current_value_label.text = f"Current: {value}"
+        else:
+            self.current_value_label.text = ""
 
     def is_mouseover(self, x, y):
         horizontal_distance = x - self.layout.x
