@@ -9,7 +9,6 @@ import widgets
 class SimulationWindow(pyglet.window.Window):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.maximize()
         self.static_batch = pyglet.graphics.Batch()
         self.simulation_batch = pyglet.graphics.Batch()
         self.renderer = Renderer(self.simulation_batch, Vector(0, 0), 0, 0, 0, 0)
@@ -18,27 +17,28 @@ class SimulationWindow(pyglet.window.Window):
         self.engine_stalled = True
         self.last_save_id = None
         self.simulation_speed_factor = 0.02  # 50x slower
-        self.origin = Vector(300, 200)
+        self.origin = Vector(300, 400)
 
         simulation_area_width = 600
-        ui_start_x = simulation_area_width + 100
+        ui_start_x = simulation_area_width + 150
         ui_start_y = self.height - 50
         ui_spacing = 40
-        textbox_width = 100
 
+        label_start_x = ui_start_x - 10
         self.labels = [
-            pyglet.text.Label("Live Parameters", x=ui_start_x, y=ui_start_y,
+            pyglet.text.Label("Live Parameters", label_start_x, ui_start_y,
                               color=(255, 255, 255, 255), batch=self.static_batch),
-            pyglet.text.Label("Crank", x=ui_start_x, y=ui_start_y - 3 * ui_spacing,  # Shifted down
+            pyglet.text.Label("Crank", label_start_x, ui_start_y - 3 * ui_spacing,  # Shifted down
                               color=(255, 255, 255, 255), batch=self.static_batch),
-            pyglet.text.Label("Connecting Rod", x=ui_start_x, y=ui_start_y - 6 * ui_spacing,  # Shifted down
+            pyglet.text.Label("Connecting Rod", label_start_x, ui_start_y - 6 * ui_spacing,  # Shifted down
                               color=(255, 255, 255, 255), batch=self.static_batch),
-            pyglet.text.Label("Piston", x=ui_start_x, y=ui_start_y - 9 * ui_spacing,  # Shifted down
+            pyglet.text.Label("Piston", label_start_x, ui_start_y - 9 * ui_spacing,  # Shifted down
                               color=(255, 255, 255, 255), batch=self.static_batch),
-            pyglet.text.Label("Manage Saves", x=ui_start_x, y=ui_start_y - 14 * ui_spacing,  # Shifted down
+            pyglet.text.Label("Manage Saves", label_start_x, ui_start_y - 14 * ui_spacing,  # Shifted down
                               color=(255, 255, 255, 255), batch=self.static_batch)
         ]
 
+        textbox_width = 100
         self.parameter_input_widgets = [
             #Live Parameters
             widgets.TextBox("Fuel injected per cycle (g):", ui_start_x, ui_start_y - ui_spacing, textbox_width, self.static_batch),
@@ -58,31 +58,33 @@ class SimulationWindow(pyglet.window.Window):
             widgets.TextBox("Configuration Name:", ui_start_x, ui_start_y - 15 * ui_spacing, textbox_width, self.static_batch)
         ]
 
-        buttons_y = ui_start_y - 17 * ui_spacing
+        buttons_y = ui_start_y - 17 * ui_spacing - 20
+        buttons_x = 30
         button_width = 180
         button_height = 50
         button_spacing = 20
         self.button_widgets = [
-            widgets.Button("Pause/Unpause", ui_start_x, buttons_y, button_width, button_height, 
+            widgets.Button("Pause/Unpause", buttons_x, buttons_y, button_width, button_height, 
                    self.toggle_simulation_pause_button, self.static_batch),
-            widgets.Button("Set Parameters", ui_start_x + button_width + button_spacing, buttons_y, 
+            widgets.Button("Set Parameters", buttons_x + button_width + button_spacing, buttons_y, 
                    button_width, button_height, self.start_simulation_button, self.static_batch),
-            widgets.Button("Starter", ui_start_x + 2 * (button_width + button_spacing), buttons_y, 
+            widgets.Button("Starter", buttons_x + 2 * (button_width + button_spacing), buttons_y, 
                    button_width, button_height, self.ignition_starter_button, self.static_batch),
-            widgets.Button("Save Configuration", ui_start_x, buttons_y - button_height - button_spacing, 
+            widgets.Button("Save Configuration", buttons_x, buttons_y - button_height - button_spacing, 
                    button_width, button_height, self.save_config_button, self.static_batch),
-            widgets.Button("Load Configuration", ui_start_x + button_width + button_spacing, 
+            widgets.Button("Load Configuration", buttons_x + button_width + button_spacing, 
                            buttons_y - button_height - button_spacing, button_width, button_height, self.load_config_button, self.static_batch),
-            widgets.Button("Delete Record", ui_start_x + 2 * (button_width + button_spacing), 
+            widgets.Button("Delete Record", buttons_x + 2 * (button_width + button_spacing), 
                            buttons_y - button_height - button_spacing, button_width, button_height, self.delete_record_button, self.static_batch)
         ]
-        
-        list_y = buttons_y - button_height - button_spacing * 2
-        self.list_box = widgets.ListBox(self.get_engine_design_entries(), x=ui_start_x, y=list_y - 200, 
-                                        width=button_width * 2 + button_spacing, height=200, batch=self.static_batch)
 
         self.text_cursor = self.get_system_mouse_cursor('text')
         self.focused_widget = None
+        
+        list_y = buttons_y - 150 + 20
+        list_x = buttons_x + 3 * (button_width + button_spacing)
+        self.list_box = widgets.ListBox(self.get_engine_design_entries(), x=list_x, y=list_y, 
+                                        width=button_width * 2 + button_spacing, height=200, batch=self.static_batch)
 
     def on_draw(self):
         self.clear()
@@ -111,7 +113,7 @@ class SimulationWindow(pyglet.window.Window):
         if self.simulation_paused is True: 
             return
         current_time = (time.perf_counter() - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor
-        torque = round(self.simulation.crank.instantenous_torque, 6)
+        torque = round(self.simulation.crank.total_torque, 6)
         rpm = round(self.simulation.crank.get_rpm(), 6)
         self.renderer.store_graph_point(current_time, torque, rpm)
 
@@ -157,6 +159,7 @@ class SimulationWindow(pyglet.window.Window):
     def load_config_button(self):
         parameters = list(self.list_box.get_focused_data())
         if parameters is not None:
+            #self.list_box.focused_row.toggle_focus()
             self.start_simulation(parameters[2:], self.origin)
 
     def save_configuration(self, cursor, configuration_name, *parameters):
@@ -314,7 +317,7 @@ class SimulationWindow(pyglet.window.Window):
         self.renderer.plot_performance(times, torques, angular_velocities, paused_points, throttle_changes, selected_record[1:], engine_design_id)
 
     def start_simulation_button(self):
-        inputs = [widget.document.text for widget in self.parameter_input_widgets[2:10]]  # Updated range
+        inputs = [widget.document.text for widget in self.parameter_input_widgets[2:10]]
         if "" in inputs: 
             return
         parameters = list(map(float, inputs))
@@ -324,16 +327,19 @@ class SimulationWindow(pyglet.window.Window):
         elif parameters[2] <= parameters[0]:
             print("Connector Rod Length cannot be smaller than Crank Radius")
             return
-            
-        self.renderer_parameters = parameters.copy()
-        for i, input in enumerate(parameters):
-            self.parameter_input_widgets[i+2].set_current_value(input)
-            self.parameter_input_widgets[i+2].document.text = ""
-            
+                     
         self.start_simulation(parameters, self.origin)
 
     def start_simulation(self, simulation_parameters, origin):
+        for i, input in enumerate(simulation_parameters):
+            self.parameter_input_widgets[i+2].set_current_value(input)
+            self.parameter_input_widgets[i+2].document.text = ""
+
+        self.parameter_input_widgets[0].set_current_value(None)
+        self.parameter_input_widgets[1].set_current_value(None)
+
         self.renderer.close_plot(0)
+        self.renderer_parameters = simulation_parameters.copy()   
         self.simulation_batch = pyglet.graphics.Batch()
         # [0]=crank_radius, [2]=rod_length, [4]=piston_radius, [5]=piston_length, [7]=deck_clearance
         for i in [0, 2, 4, 5, 7]:
@@ -366,17 +372,12 @@ class SimulationWindow(pyglet.window.Window):
     def ignition_starter_button(self):
         if hasattr(self, 'simulation') and self.simulation_paused is False:
             if self.engine_stalled:
-                pyglet.clock.schedule_interval(self.starter, 0.01)
-                pyglet.clock.schedule_once(self.starter_cutout, 1)
+                self.engine_stalled = False
+                self.simulation.toggle_starter_motor()
+                pyglet.clock.schedule_once(self.starter_cutout, 3)
 
     def starter_cutout(self, _dt):
-        pyglet.clock.unschedule(self.starter)
-
-    def starter(self, dt):
-        starting_force = 5
-        self.simulation.crank.update_angular_velocity(starting_force, dt * self.simulation_speed_factor)
-        print(f"Starter applied, current RPM: {self.simulation.crank.get_rpm()}")
-        self.engine_stalled = False
+        self.simulation.toggle_starter_motor()
 
     def mm_to_m(self, value):
         return value / 1000.0
@@ -431,15 +432,14 @@ class SimulationWindow(pyglet.window.Window):
 
     def on_mouse_press(self, x, y, button, modifiers):
         if button == pyglet.window.mouse.LEFT:
-            selected_data = self.list_box.on_mouse_press(x, y)
-            print(selected_data)
-            if selected_data:
-                self.load_plot(selected_data)
-            
             for button_widget in self.button_widgets:
                 if button_widget.is_mouseover(x, y):
                     button_widget.on_click()
-                    return
+                    break
+
+            selected_data = self.list_box.on_mouse_press(x, y)
+            if selected_data:
+                self.load_plot(selected_data)
 
             for widget in self.parameter_input_widgets:
                 if widget.is_mouseover(x, y):
@@ -508,7 +508,7 @@ if __name__ == "__main__":
     cursor = conn.cursor()
     conn.commit()
     conn.close()
-    simulation = SimulationWindow(width=1280, height=900, resizable=True, caption="Piston Engine Simulation", vsync=False)
+    simulation = SimulationWindow(width=1050, height=900, resizable=False, caption="Piston Engine Simulation", vsync=False)
     pyglet.clock.schedule_interval(simulation.update_simulation, 1/3000) 
     pyglet.clock.schedule_interval(simulation.sample_graph_point, 1/1000)
     #pyglet.options['com_mta'] = True

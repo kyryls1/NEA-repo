@@ -103,15 +103,21 @@ class ListBox:
                 if (clicked_row == self.focused_row and current_time - self.last_click_time < 0.5):
                     self.last_click_time = current_time
                     if self.focused_row:
-                        self.focused_row.toggle_focus()  # Unfocus the row
+                        self.focused_row.toggle_focus()
                         self.focused_row = None
                     return row.data
                 
                 self.last_click_time = current_time
-                if self.focused_row is not None: self.focused_row.toggle_focus()
+                if self.focused_row is not None: 
+                    self.focused_row.toggle_focus()
+
                 self.focused_row = row
                 self.focused_row.toggle_focus()
                 return None
+
+        if self.focused_row:
+            self.focused_row.toggle_focus()
+            self.focused_row = None
         return None
     
     def on_mouse_scroll(self, x, y, scroll_x, scroll_y):

@@ -63,6 +63,9 @@ class Simulation():
         self.gas_simulation = GasSimulation(crank_radius, connector_rod_length, deck_clearance)
 
         self.component_weight = (rod_mass + piston_mass) * 9.81
+
+    def toggle_starter_motor(self):
+        self.crank.starter_motor_on = not self.crank.starter_motor_on
  
     def update_fuel_flow_rate(self, mass_flow_rate):
         self.gas_simulation.update_fuel_flow_rate(mass_flow_rate)

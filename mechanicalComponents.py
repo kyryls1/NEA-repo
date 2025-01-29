@@ -9,11 +9,14 @@ class Crank():
         self.MASS = mass
         self.MOMENT_OF_INERTIA = self.MASS * self.RADIUS**2
         self.engine_load = 0
+        self.starter_motor_torque = 20
+        self.starter_motor_on = False
         self.torque_history = LinkedList()
 
         self.angular_velocity = 0
         self.angle_radians = 0
         self.instantenous_torque = 0
+        self.total_torque = 0
  
     def update_engine_load(self, load):
         self.engine_load = load
@@ -34,20 +37,23 @@ class Crank():
         self.angular_velocity += angular_velocity_change
 
     def subtract_engine_load(self, torque, crank_angle):
+        if self.angular_velocity == 0:
+            return torque
+        
         load_torque = self.engine_load / -self.angular_velocity
-        print(torque, load_torque + torque)
         return torque + load_torque
 
     def update(self, force, dt):
         self.instantenous_torque = self.calculate_torque(force)
-        if self.angular_velocity > 40:
-            total_torque = self.subtract_engine_load(self.instantenous_torque, self.angle_radians)
-        else:
-            total_torque = self.instantenous_torque
-        self.update_angular_velocity(total_torque, dt)
+        self.total_torque = self.subtract_engine_load(self.instantenous_torque, self.angle_radians)
+        if self.starter_motor_on:
+            self.total_torque += self.starter_motor_torque
+
+        self.update_angular_velocity(self.total_torque, dt)
         self.update_angle(self.calculate_delta_theta(dt))
 
     def get_rpm(self):
+        print(self.angular_velocity * 60 / (2 * math.pi))
         return self.angular_velocity * 60 / (2 * math.pi)
 
 class ConnectorRod():
@@ -96,31 +102,6 @@ class Piston():
         self.velocity = dy / dt
         self.last_position.y = self.position.y
         self.previous_velocity = self.velocity
-
-    def calculate_viscosity(self, temperature):
-        # Simple Arrhenius formula: eta = A * exp(B / T)
-        # T assumed to be > 0 K
-        if temperature <= 0:
-            temperature = 1  # avoid zero or negative
-
-        viscosity = self.visc_A * math.exp(self.visc_B / temperature)
-        viscosity = max(1e-6, viscosity)  # Minimum 1e-6 Pa·s
-
-        return viscosity
-
-    def calculate_film_thickness(self, load_force, temperature):
-        # Basic EHD approximation: film_thickness ~ c * (eta * velocity / load)^exponent
-        # load_force is approximate normal load
-        eta = self.calculate_viscosity(temperature)  # fallback for no temperature data, or use last known
-        velocity = abs(self.velocity)
-        if load_force <= 0:  # avoid negative or zero
-            load_force = 1
-        
-        film_thickness = self.ehd_constant * ((eta * velocity) / load_force) ** self.ehd_exponent
-        film_thickness = max(1e-7, film_thickness)  # Minimum 0.1 microns
-        film_thickness = min(1e-3, film_thickness)
-
-        return film_thickness
 
     def update(self, y_coordinate, dt):
         self.position.y = y_coordinate
