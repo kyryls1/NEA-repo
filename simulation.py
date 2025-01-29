@@ -6,8 +6,8 @@ class GasSimulation():
     def __init__(self, crank_radius, connector_rod_length, deck_clearance):
         self.combustion_temperature = 2273
         self.ambient_temperature = 623
-        self.moles_after_combustion = 9/76 * 0.1
-        self.moles_before_combustion = 17/114 * 0.1
+        self.moles_after_combustion = 0
+        self.moles_before_combustion = 0
         self.temperature_difference = self.combustion_temperature - self.ambient_temperature
         self.moles_difference = self.moles_after_combustion - self.moles_before_combustion
         self.cylinder_head_position = Vector(0, crank_radius + connector_rod_length + deck_clearance)
@@ -66,6 +66,9 @@ class Simulation():
  
     def update_fuel_flow_rate(self, mass_flow_rate):
         self.gas_simulation.update_fuel_flow_rate(mass_flow_rate)
+
+    def update_engine_load(self, engine_load):
+        self.crank.update_engine_load(engine_load)
         
     def update_all(self, dt):
         gas_force = self.gas_simulation.calculate_force(self.crank.angle_radians, self.piston.position)

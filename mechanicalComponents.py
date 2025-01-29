@@ -8,12 +8,16 @@ class Crank():
         self.RADIUS = radius
         self.MASS = mass
         self.MOMENT_OF_INERTIA = self.MASS * self.RADIUS**2
+        self.engine_load = 0
         self.torque_history = LinkedList()
 
         self.angular_velocity = 0
         self.angle_radians = 0
         self.instantenous_torque = 0
  
+    def update_engine_load(self, load):
+        self.engine_load = load
+        
     def calculate_torque(self, force):
         return force * (self.RADIUS)
 
@@ -28,10 +32,19 @@ class Crank():
         angular_momentum_change = torque * dt
         angular_velocity_change = angular_momentum_change / self.MOMENT_OF_INERTIA
         self.angular_velocity += angular_velocity_change
- 
+
+    def subtract_engine_load(self, torque, crank_angle):
+        load_torque = self.engine_load / -self.angular_velocity
+        print(torque, load_torque + torque)
+        return torque + load_torque
+
     def update(self, force, dt):
         self.instantenous_torque = self.calculate_torque(force)
-        self.update_angular_velocity(self.instantenous_torque, dt)
+        if self.angular_velocity > 40:
+            total_torque = self.subtract_engine_load(self.instantenous_torque, self.angle_radians)
+        else:
+            total_torque = self.instantenous_torque
+        self.update_angular_velocity(total_torque, dt)
         self.update_angle(self.calculate_delta_theta(dt))
 
     def get_rpm(self):

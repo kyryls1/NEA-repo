@@ -6,28 +6,31 @@ import matplotlib.pyplot as plt
 import multiprocessing
 
 class Renderer:
-    def __init__(self, batch, origin, crank_radius_mm, rod_length_mm, piston_radius_mm, piston_length_mm):
+    
+    def __init__(self, batch, origin, crank_radius_m, rod_length_m, piston_radius_m, piston_length_m):
         self.batch = batch
         self.origin = origin
-        self.crank_radius = crank_radius_mm
-        self.rod_length = rod_length_mm
-        self.piston_radius = piston_radius_mm
-        self.piston_length = piston_length_mm
+        self.SCALE_FACTOR = 2000  # 1mm = 2px
         self.open_design_plots = {}
         
-        self.rod = pyglet.shapes.Line(x=origin.x, y=origin.y + crank_radius_mm, x2=origin.x, 
-                                      y2=origin.y + crank_radius_mm + rod_length_mm, thickness=15, color=[201, 201, 201], batch=batch)
-        self.piston_bearing = pyglet.shapes.Circle(x=origin.x, y=origin.y + crank_radius_mm + rod_length_mm, 
+        scaled_crank_px = crank_radius_m * self.SCALE_FACTOR
+        scaled_rod_px = rod_length_m * self.SCALE_FACTOR
+        scaled_piston_radius_px = piston_radius_m * self.SCALE_FACTOR
+        scaled_piston_length_px = piston_length_m * self.SCALE_FACTOR
+        
+        self.rod = pyglet.shapes.Line(x=origin.x, y=origin.y + scaled_crank_px, x2=origin.x, 
+                                      y2=origin.y + scaled_crank_px + scaled_rod_px, thickness=15, color=[201, 201, 201], batch=batch)
+        self.piston_bearing = pyglet.shapes.Circle(x=origin.x, y=origin.y + scaled_crank_px + scaled_rod_px, 
                                                    radius=15, color=[201, 201, 201], batch=batch)
-        self.piston = pyglet.shapes.Rectangle(x=origin.x - piston_radius_mm, 
-                                              y=origin.y + crank_radius_mm + rod_length_mm, 
-                                              width=piston_radius_mm * 2, 
-                                              height=piston_length_mm, 
+        self.piston = pyglet.shapes.Rectangle(x=origin.x - scaled_piston_radius_px, 
+                                              y=origin.y + scaled_crank_px + scaled_rod_px, 
+                                              width=scaled_piston_radius_px * 2, 
+                                              height=scaled_piston_length_px, 
                                               color=[255, 255, 255], 
                                               batch=batch)
-        self.crank_bearing = pyglet.shapes.Circle(x=origin.x, y=origin.y + crank_radius_mm, 
+        self.crank_bearing = pyglet.shapes.Circle(x=origin.x, y=origin.y + scaled_crank_px, 
                                                   radius=20, color=[255, 255, 255], batch=batch)
-        self.crankarm = pyglet.shapes.Line(x=origin.x, y=origin.y, x2=origin.x, y2=origin.y + crank_radius_mm, 
+        self.crankarm = pyglet.shapes.Line(x=origin.x, y=origin.y, x2=origin.x, y2=origin.y + scaled_crank_px, 
                                            thickness=40, color=[255, 255, 255], batch=batch)
         self.axle = pyglet.shapes.Circle(x=origin.x, y=origin.y, radius=20, color=[201, 201, 201], batch=batch)
         
@@ -41,17 +44,17 @@ class Renderer:
         self.crankarm.rotation = angle_degrees
         self.axle.rotation = angle_degrees
 
-        self.rod.x = self.origin.x + rod.rod_start.x * 1000
-        self.rod.y = self.origin.y + rod.rod_start.y * 1000
-        self.rod.x2 = self.origin.x + rod.rod_end.x * 1000
-        self.rod.y2 = self.origin.y + rod.rod_end.y * 1000
+        self.rod.x = self.origin.x + rod.rod_start.x * self.SCALE_FACTOR
+        self.rod.y = self.origin.y + rod.rod_start.y * self.SCALE_FACTOR
+        self.rod.x2 = self.origin.x + rod.rod_end.x * self.SCALE_FACTOR
+        self.rod.y2 = self.origin.y + rod.rod_end.y * self.SCALE_FACTOR
 
         self.crank_bearing.x = self.rod.x
         self.crank_bearing.y = self.rod.y
         self.piston_bearing.x = self.rod.x2
         self.piston_bearing.y = self.rod.y2
 
-        self.piston.y = self.origin.y + piston.position.y * 1000
+        self.piston.y = self.origin.y + piston.position.y * self.SCALE_FACTOR
 
     def store_graph_point(self, current_time, torque, angular_velocity):
         self.graph_points.append((current_time, torque, angular_velocity))
