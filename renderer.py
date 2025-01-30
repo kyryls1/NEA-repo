@@ -6,17 +6,16 @@ import matplotlib.pyplot as plt
 import multiprocessing
 
 class Renderer:
-    
     def __init__(self, batch, origin, crank_radius_m, rod_length_m, piston_radius_m, piston_length_m):
         self.batch = batch
         self.origin = origin
-        self.SCALE_FACTOR = 2000  # 1mm = 2px
+        self.scale_factor = 2000  # 1mm = 2px
         self.open_design_plots = {}
         
-        scaled_crank_px = crank_radius_m * self.SCALE_FACTOR
-        scaled_rod_px = rod_length_m * self.SCALE_FACTOR
-        scaled_piston_radius_px = piston_radius_m * self.SCALE_FACTOR
-        scaled_piston_length_px = piston_length_m * self.SCALE_FACTOR
+        scaled_crank_px = crank_radius_m * self.scale_factor
+        scaled_rod_px = rod_length_m * self.scale_factor
+        scaled_piston_radius_px = piston_radius_m * self.scale_factor
+        scaled_piston_length_px = piston_length_m * self.scale_factor
         
         self.rod = pyglet.shapes.Line(x=origin.x, y=origin.y + scaled_crank_px, x2=origin.x, 
                                       y2=origin.y + scaled_crank_px + scaled_rod_px, thickness=15, color=[201, 201, 201], batch=batch)
@@ -45,17 +44,17 @@ class Renderer:
         self.crankarm.rotation = angle_degrees
         self.axle.rotation = angle_degrees
 
-        self.rod.x = self.origin.x + rod.rod_start.x * self.SCALE_FACTOR
-        self.rod.y = self.origin.y + rod.rod_start.y * self.SCALE_FACTOR
-        self.rod.x2 = self.origin.x + rod.rod_end.x * self.SCALE_FACTOR
-        self.rod.y2 = self.origin.y + rod.rod_end.y * self.SCALE_FACTOR
+        self.rod.x = self.origin.x + rod.rod_start.x * self.scale_factor
+        self.rod.y = self.origin.y + rod.rod_start.y * self.scale_factor
+        self.rod.x2 = self.origin.x + rod.rod_end.x * self.scale_factor
+        self.rod.y2 = self.origin.y + rod.rod_end.y * self.scale_factor
 
         self.crank_bearing.x = self.rod.x
         self.crank_bearing.y = self.rod.y
         self.piston_bearing.x = self.rod.x2
         self.piston_bearing.y = self.rod.y2
 
-        self.piston.y = self.origin.y + piston.position.y * self.SCALE_FACTOR
+        self.piston.y = self.origin.y + piston.position.y * self.scale_factor
 
     def store_graph_point(self, current_time, torque, angular_velocity):
         self.graph_points.append((current_time, torque, angular_velocity))

@@ -43,11 +43,11 @@ class ListRow:
     
     def set_hover(self, x, y):
         if self.focused:
-            self.bounding_box.color = (180, 180, 200)  # Lighter color for focus
+            return
         elif self.is_mouseover(x, y):
-            self.bounding_box.color = (150, 150, 170)  # Darker hover color
+            self.bounding_box.color = (150, 150, 170)
         else:
-            self.bounding_box.color = (200, 200, 220)  # Original base color
+            self.bounding_box.color = (200, 200, 220)
     
     def set_visible(self, visible):
         self.visible = visible
@@ -57,16 +57,15 @@ class ListRow:
     def toggle_focus(self):
         self.focused = not self.focused
         if self.focused:
-            self.bounding_box.color = (180, 180, 200)  # Lighter color for focus
+            self.bounding_box.color = (127, 127, 145)
         else:
-            self.bounding_box.color = (200, 200, 220)  # Original base color
+            self.bounding_box.color = (200, 200, 220)
 
-class ListBox:
+class ListTable:
     def __init__(self, items, x, y, width, height, batch):
         self.batch = batch
         self.items_data = items
-        self.x, self.y = x, y
-        self.width, self.height = width, height
+        self.bounding_box = pyglet.shapes.Rectangle(x, y, width, height, color=(200, 200, 220), batch=batch)
         self.scroll_offset = 0
         self.item_height = 30
         self.padding = 20
@@ -84,7 +83,7 @@ class ListBox:
         
         for item in items:
             if isinstance(item, (list, tuple)) and len(item) > 1:  # Ensure item is sequence with at least 2 elements
-                row = ListRow(item, self.x, 0, self.width, self.item_height, self.batch)
+                row = ListRow(item, self.bounding_box.x, 0, self.bounding_box.width, self.item_height, self.batch)
                 self.rows.append(row)
             else:
                 print(f"Warning: Skipping invalid record format: {item}")
@@ -120,22 +119,22 @@ class ListBox:
             self.focused_row = None
         return None
     
-    def on_mouse_scroll(self, x, y, scroll_x, scroll_y):
-        if self.is_mouseover_list_box(x, y):
+    def on_mouse_scroll(self, x, y, _scroll_x, scroll_y):
+        if self.is_mouseover_table(x, y):
             max_offset = max(0, len(self.rows) - self.visible_count)
             self.scroll_offset = min(max(0, self.scroll_offset - int(scroll_y)), max_offset)
             self.update_row_positions()
     
-    def is_mouseover_list_box(self, x, y):
-        is_within_horizontal_bounds = self.x < x < self.x + self.width
-        is_within_vertical_bounds = self.y < y < self.y + self.height
+    def is_mouseover_table(self, x, y):
+        is_within_horizontal_bounds = self.bounding_box.x < x < self.bounding_box.x + self.bounding_box.width
+        is_within_vertical_bounds = self.bounding_box.y < y < self.bounding_box.y + self.bounding_box.height
 
         return is_within_horizontal_bounds and is_within_vertical_bounds
 
     def update_row_positions(self):
         start_index = self.scroll_offset
         end_index = min(start_index + self.visible_count, len(self.rows))
-        current_y = self.y + self.height
+        current_y = self.bounding_box.y + self.bounding_box.height
         
         for i, row in enumerate(self.rows):
             if i < start_index or i >= end_index:
@@ -144,9 +143,9 @@ class ListBox:
             
             row.set_visible(True)
             row_y = current_y - self.item_height
-            row.bounding_box.x = self.x
+            row.bounding_box.x = self.bounding_box.x
             row.bounding_box.y = row_y
-            row.label.x = self.x + self.padding
+            row.label.x = self.bounding_box.x + self.padding
             row.label.y = row_y + self.item_height // 2
             current_y -= self.item_height
 

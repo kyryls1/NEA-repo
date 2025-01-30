@@ -5,8 +5,21 @@ from renderer import Renderer
 from simulation import Simulation
 import sqlite3
 import widgets
+import re
 
 class SimulationWindow(pyglet.window.Window):
+    PARAMETER_CONSTRAINTS = {
+        'fuel_flow': {'min': 0, 'max': 1, 'name': 'Fuel flow'},
+        'crank_radius': {'min': 15, 'max': 60, 'name': 'Crank radius'},
+        'crank_mass': {'min': 1, 'max': 30, 'name': 'Crank mass'},
+        'rod_length': {'min': 50, 'max': 140, 'name': 'Rod length'},
+        'rod_mass': {'min': 0.5, 'max': 15, 'name': 'Rod mass'},
+        'piston_radius': {'min': 17.5, 'max': 55, 'name': 'Piston radius'},
+        'piston_length': {'min': 30, 'max': 70, 'name': 'Piston length'},
+        'piston_mass': {'min': 1, 'max': 20, 'name': 'Piston mass'},
+        'deck_clearance': {'min': 0.1, 'max': 5, 'name': 'Deck clearance'}
+    }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.static_batch = pyglet.graphics.Batch()
@@ -16,8 +29,8 @@ class SimulationWindow(pyglet.window.Window):
         self.simulation_paused = True
         self.engine_stalled = True
         self.last_save_id = None
-        self.simulation_speed_factor = 0.02  # 50x slower
-        self.origin = Vector(300, 400)
+        self.simulation_speed_factor = 0.02  # 50x slower than real time
+        self.origin = Vector(300, 350)
 
         simulation_area_width = 600
         ui_start_x = simulation_area_width + 150
@@ -55,10 +68,10 @@ class SimulationWindow(pyglet.window.Window):
             widgets.TextBox("Mass (kg):", ui_start_x, ui_start_y - 12 * ui_spacing, textbox_width, self.static_batch),
             widgets.TextBox("Deck Clearance (mm):", ui_start_x, ui_start_y - 13 * ui_spacing, textbox_width, self.static_batch),
             #Manage Saves
-            widgets.TextBox("Configuration Name:", ui_start_x, ui_start_y - 15 * ui_spacing, 200, self.static_batch)
+            widgets.TextBox("Configuration Name:", ui_start_x, ui_start_y - 15 * ui_spacing, 230, self.static_batch)
         ]
 
-        buttons_y = ui_start_y - 17 * ui_spacing - 20
+        buttons_y = ui_start_y - 17 * ui_spacing - 30
         buttons_x = 30
         button_width = 180
         button_height = 50
@@ -81,10 +94,10 @@ class SimulationWindow(pyglet.window.Window):
         self.text_cursor = self.get_system_mouse_cursor('text')
         self.focused_widget = None
         
-        list_y = buttons_y - 150 + 20
+        list_y = buttons_y - 115
         list_x = buttons_x + 3 * (button_width + button_spacing)
-        self.list_box = widgets.ListBox(self.get_engine_design_entries(), x=list_x, y=list_y, 
-                                        width=button_width * 2 + button_spacing, height=200, batch=self.static_batch)
+        self.record_table = widgets.ListTable(self.get_engine_design_entries(), x=list_x, y=list_y, 
+                                        width=button_width * 2 + button_spacing, height=210, batch=self.static_batch)
 
     # UI/Widget Initialization functions
     def focus_widget(self, widget):
@@ -97,10 +110,8 @@ class SimulationWindow(pyglet.window.Window):
         if self.is_focused_widget_set():
             index = self.parameter_input_widgets.index(self.focused_widget)
             new_index = (index + direction) % len(self.parameter_input_widgets)
-            if new_index == 0:
-                new_index = 1
         else:
-            new_index = 1
+            new_index = 0
 
         self.focus_widget(self.parameter_input_widgets[new_index])
 
@@ -124,10 +135,10 @@ class SimulationWindow(pyglet.window.Window):
             for button_widget in self.button_widgets:
                 button_widget.set_hover(x, y)
             else:
-                self.list_box.on_mouse_motion(x, y)
+                self.record_table.on_mouse_motion(x, y)
     
     def on_mouse_scroll(self, x, y, scroll_x, scroll_y):
-        self.list_box.on_mouse_scroll(x, y, scroll_x, scroll_y)
+        self.record_table.on_mouse_scroll(x, y, scroll_x, scroll_y)
 
     def on_mouse_press(self, x, y, button, modifiers):
         if button == pyglet.window.mouse.LEFT:
@@ -136,7 +147,7 @@ class SimulationWindow(pyglet.window.Window):
                     button_widget.on_click()
                     break
 
-            selected_data = self.list_box.on_mouse_press(x, y)
+            selected_data = self.record_table.on_mouse_press(x, y)
             if selected_data:
                 self.load_plot(selected_data)
 
@@ -160,24 +171,16 @@ class SimulationWindow(pyglet.window.Window):
             self.focused_widget.caret.on_mouse_drag(x, y, dx, dy, buttons, modifiers)
 
     def on_text(self, text):
-        if text in ("\r", "\n"):
-            return
         if self.is_focused_widget_set():
+            current_text = self.focused_widget.document.text
+        
             if self.focused_widget is not self.parameter_input_widgets[10]:
-                allowed_chars = "0123456789."
-                if text not in allowed_chars:
+                if not re.match(r'^(?!.{10,})[0-9]*\.?[0-9]*$', current_text + text):
                     return
-                elif text == "." and "." in self.focused_widget.document.text:
-                    return
-                elif len(self.focused_widget.document.text) >= 10:
-                    return
-                
             else:
-                if text == " " and self.focused_widget.document.text == "":
+                if not re.match(r'^(?!.{40,})(?!\s)[^\r\n]*$', current_text + text):
                     return
-                elif len(self.focused_widget.document.text) >= 40:
-                    return
-            
+        
             self.focused_widget.caret.on_text(text)
 
     def on_text_motion(self, motion):
@@ -261,11 +264,15 @@ class SimulationWindow(pyglet.window.Window):
         if "" in inputs: 
             return
         parameters = list(map(float, inputs))
-        if 0 in parameters:
-            print("Parameters cannot be zero")
-            return
-        elif parameters[2] <= parameters[0]:
-            print("Connector Rod Length cannot be smaller than Crank Radius")
+        param_names = ['crank_radius', 'crank_mass', 'rod_length', 'rod_mass', 
+                      'piston_radius', 'piston_length', 'piston_mass', 'deck_clearance']  # Fixed order
+        
+        for value, name in zip(parameters, param_names):
+            if not self.validate_parameter(name, value):
+                return
+
+        if parameters[2] <= parameters[0]:
+            print("Error: Connector Rod Length cannot be smaller than Crank Radius")
             return
                      
         self.start_simulation(parameters, self.origin)
@@ -296,6 +303,8 @@ class SimulationWindow(pyglet.window.Window):
 
     def update_fuel_flow_rate(self, fuel_flow_rate):
         if hasattr(self, 'simulation') and fuel_flow_rate != "":
+            if not self.validate_parameter('fuel_flow', fuel_flow_rate):
+                return
             self.simulation.update_fuel_flow_rate(fuel_flow_rate)
             current_time = (time.perf_counter() - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor
             self.renderer.store_throttle_change_point(current_time, fuel_flow_rate)
@@ -321,7 +330,7 @@ class SimulationWindow(pyglet.window.Window):
                 if self.button_widgets[3].label.text == "Overwrite Last Save":
                     self.delete_record(cursor, self.last_save_id)
                     conn.commit()
-                    self.list_box.update_table(self.get_engine_design_entries())
+                    self.record_table.update_table(self.get_engine_design_entries())
                 else:
                     self.button_widgets[3].label.text = "Overwrite Last Save"
 
@@ -334,13 +343,12 @@ class SimulationWindow(pyglet.window.Window):
                 conn.commit()
                 conn.close()
 
-                self.list_box.update_table(self.get_engine_design_entries())
+                self.record_table.update_table(self.get_engine_design_entries())
                 self.parameter_input_widgets[10].document.text = ""
 
     def load_config_button(self):
-        parameters = list(self.list_box.get_focused_data())
+        parameters = list(self.record_table.get_focused_data())
         if parameters is not None:
-            #self.list_box.focused_row.toggle_focus()
             self.start_simulation(parameters[2:], self.origin)
 
     def save_configuration(self, cursor, configuration_name, *parameters):
@@ -434,7 +442,7 @@ class SimulationWindow(pyglet.window.Window):
     def delete_record_button(self):
         conn = sqlite3.connect('database.db')
         cursor = conn.cursor()
-        focused_row = self.list_box.get_focused_data()
+        focused_row = self.record_table.get_focused_data()
         if focused_row is not None:
             focused_row_id = focused_row[0]
             if focused_row_id == self.last_save_id:
@@ -443,7 +451,7 @@ class SimulationWindow(pyglet.window.Window):
             self.delete_record(cursor, focused_row_id)
             conn.commit()
             conn.close()
-            self.list_box.update_table(self.get_engine_design_entries())
+            self.record_table.update_table(self.get_engine_design_entries())
 
     def delete_record(self, cursor, save_id):
             cursor.execute('DELETE FROM engine_designs WHERE id = ?', (save_id,))
@@ -543,6 +551,16 @@ class SimulationWindow(pyglet.window.Window):
     # Utility functions
     def mm_to_m(self, value):
         return value / 1000.0
+
+    def validate_parameter(self, param_name, value):
+        constraints = self.PARAMETER_CONSTRAINTS[param_name]
+        if value < constraints['min']:
+            print(f"Error: {constraints['name']} too small (minimum: {constraints['min']})")
+            return False
+        if value > constraints['max']:
+            print(f"Error: {constraints['name']} too large (maximum: {constraints['max']})")
+            return False
+        return True
 
 if __name__ == "__main__":
     conn = sqlite3.connect('database.db')
