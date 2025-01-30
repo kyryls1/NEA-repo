@@ -37,6 +37,7 @@ class Renderer:
         self.graph_points = LinkedList()
         self.paused_points = LinkedList()
         self.throttle_change_points = LinkedList()  # New list for fuel changes
+        self.engine_load_change_points = LinkedList()  # New list for engine load changes
         matplotlib.use('TkAgg')
                                                   
     def render(self, crank, rod, piston):
@@ -65,13 +66,17 @@ class Renderer:
     def store_throttle_change_point(self, time, new_fuel_flow_rate):
         self.throttle_change_points.append((time, new_fuel_flow_rate))
 
+    def store_engine_load_change_point(self, time, new_load):
+        self.engine_load_change_points.append((time, new_load))
+
     def plot_active_configuration(self, parameters):
         times, torques, angular_velocities = zip(*self.graph_points)
         paused_points = list(self.paused_points)
         throttle_changes = list(self.throttle_change_points)
-        self.plot_performance(times, torques, angular_velocities, paused_points, throttle_changes, parameters)
+        engine_load_changes = list(self.engine_load_change_points)
+        self.plot_performance(times, torques, angular_velocities, paused_points, throttle_changes, engine_load_changes, parameters)
 
-    def plot_performance(self, times, torques, angular_velocities, paused_points, throttle_changes, simulation_parameters, engine_design_id=0):
+    def plot_performance(self, times, torques, angular_velocities, paused_points, throttle_changes, engine_load_changes, simulation_parameters, engine_design_id=0):
         if engine_design_id in self.open_design_plots:
             if self.open_design_plots[engine_design_id].is_alive():
                 print(f"Plot for engine design {engine_design_id} is already running")
@@ -81,14 +86,17 @@ class Renderer:
         
         plot_process_comparison = multiprocessing.Process(
             target=self.run_plot, 
-            args=(times, torques, angular_velocities, paused_points, throttle_changes, simulation_parameters)
+            args=(times, torques, angular_velocities, paused_points, throttle_changes, engine_load_changes, simulation_parameters)
         )
         self.open_design_plots[engine_design_id] = plot_process_comparison
         plot_process_comparison.start()
 
     @staticmethod
-    def run_plot(times, torques, rpms, paused_points, throttle_changes, parameters):
+    def run_plot(times, torques, rpms, paused_points, throttle_changes, engine_load_changes, parameters):
         fig, (ax_text, ax1, ax2) = plt.subplots(3, 1, figsize=(10, 8), gridspec_kw={'height_ratios': [0.15, 1, 1]})
+        
+        # Make window unresizable
+        fig.canvas.manager.window.resizable(False, False)
         fig.canvas.manager.set_window_title(parameters[0])
         
         # Hide the ax_text axes
@@ -97,9 +105,9 @@ class Renderer:
         param_text = (
             f"Simulation Parameters\n"
             f"----------------------------------------\n"
-            f"Crank:\n  Radius = {parameters[1]} mm  Mass = {parameters[2]} kg\n"
-            f"Rod:\n  Length = {parameters[3]} mm  Mass = {parameters[4]} kg\n"
-            f"Piston:\n  Radius = {parameters[5]} mm  Mass = {parameters[6]} kg"
+            f"Crank:  Radius = {parameters[1]} mm,  Mass = {parameters[2]} kg\n"
+            f"Rod:  Length = {parameters[3]} mm,  Mass = {parameters[4]} kg\n"
+            f"Piston:  Radius = {parameters[5]} mm,  Mass = {parameters[6]} kg"
         )
         
         # Add parameters text with a semi-transparent background box
@@ -135,12 +143,28 @@ class Renderer:
         for time_point, fuel_mass in throttle_changes:
             ax1.axvline(x=time_point, color='g', linestyle='-.', alpha=0.5)
             ax2.axvline(x=time_point, color='g', linestyle='-.', alpha=0.5)
-            ax1.text(time_point, ax1.get_ylim()[1] * 0.9, 
-                    f'Fuel: {fuel_mass:.3f}g', 
-                    rotation=90, color='g')
-            ax2.text(time_point, ax2.get_ylim()[1] * 0.9,
-                    f'Fuel: {fuel_mass:.3f}g',
-                    rotation=90, color='g')
+            # Position labels above the plots with horizontal text
+            ax1.annotate(f'Fuel: {fuel_mass:.3f}g', 
+                        xy=(time_point, ax1.get_ylim()[1]),
+                        xytext=(time_point - 0.1, ax1.get_ylim()[1] * 1.05),
+                        color='g')
+            ax2.annotate(f'Fuel: {fuel_mass:.3f}g',
+                        xy=(time_point, ax2.get_ylim()[1]),
+                        xytext=(time_point - 0.1, ax2.get_ylim()[1] * 1.05),
+                        color='g')
+        
+        # Add load change indicators
+        for time_point, load in engine_load_changes:
+            ax1.axvline(x=time_point, color='b', linestyle='-.', alpha=0.5)
+            ax2.axvline(x=time_point, color='b', linestyle='-.', alpha=0.5)
+            ax1.annotate(f'Load: {load:.0f}W',
+                        xy=(time_point, ax1.get_ylim()[1]),
+                        xytext=(time_point - 0.1, ax1.get_ylim()[1] * 1.15),
+                        color='b')
+            ax2.annotate(f'Load: {load:.0f}W',
+                        xy=(time_point, ax2.get_ylim()[1]),
+                        xytext=(time_point - 0.1, ax2.get_ylim()[1] * 1.15),
+                        color='b')
         
         plt.tight_layout(pad=2)  # Adjust spacing between subplots to reduce overall height
         plt.show()

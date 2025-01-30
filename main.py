@@ -28,13 +28,13 @@ class SimulationWindow(pyglet.window.Window):
         self.labels = [
             pyglet.text.Label("Live Parameters", label_start_x, ui_start_y,
                               color=(255, 255, 255, 255), batch=self.static_batch),
-            pyglet.text.Label("Crank", label_start_x, ui_start_y - 3 * ui_spacing,  # Shifted down
+            pyglet.text.Label("Crank", label_start_x, ui_start_y - 3 * ui_spacing,
                               color=(255, 255, 255, 255), batch=self.static_batch),
-            pyglet.text.Label("Connecting Rod", label_start_x, ui_start_y - 6 * ui_spacing,  # Shifted down
+            pyglet.text.Label("Connecting Rod", label_start_x, ui_start_y - 6 * ui_spacing,
                               color=(255, 255, 255, 255), batch=self.static_batch),
-            pyglet.text.Label("Piston", label_start_x, ui_start_y - 9 * ui_spacing,  # Shifted down
+            pyglet.text.Label("Piston", label_start_x, ui_start_y - 9 * ui_spacing,
                               color=(255, 255, 255, 255), batch=self.static_batch),
-            pyglet.text.Label("Manage Saves", label_start_x, ui_start_y - 14 * ui_spacing,  # Shifted down
+            pyglet.text.Label("Manage Saves", label_start_x, ui_start_y - 14 * ui_spacing,
                               color=(255, 255, 255, 255), batch=self.static_batch)
         ]
 
@@ -55,7 +55,7 @@ class SimulationWindow(pyglet.window.Window):
             widgets.TextBox("Mass (kg):", ui_start_x, ui_start_y - 12 * ui_spacing, textbox_width, self.static_batch),
             widgets.TextBox("Deck Clearance (mm):", ui_start_x, ui_start_y - 13 * ui_spacing, textbox_width, self.static_batch),
             #Manage Saves
-            widgets.TextBox("Configuration Name:", ui_start_x, ui_start_y - 15 * ui_spacing, textbox_width, self.static_batch)
+            widgets.TextBox("Configuration Name:", ui_start_x, ui_start_y - 15 * ui_spacing, 200, self.static_batch)
         ]
 
         buttons_y = ui_start_y - 17 * ui_spacing - 20
@@ -167,8 +167,11 @@ class SimulationWindow(pyglet.window.Window):
                 allowed_chars = "0123456789."
                 if text not in allowed_chars:
                     return
-                if text == "." and "." in self.focused_widget.document.text:
+                elif text == "." and "." in self.focused_widget.document.text:
                     return
+                elif len(self.focused_widget.document.text) >= 10:
+                    return
+                
             else:
                 if text == " " and self.focused_widget.document.text == "":
                     return
@@ -302,6 +305,8 @@ class SimulationWindow(pyglet.window.Window):
     def update_engine_load(self, engine_load):
         if hasattr(self, 'simulation') and engine_load != "":
             self.simulation.update_engine_load(engine_load)
+            current_time = (time.perf_counter() - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor
+            self.renderer.store_engine_load_change_point(current_time, engine_load)
             self.parameter_input_widgets[1].set_current_value(engine_load)
             self.parameter_input_widgets[1].document.text = ""
 
@@ -325,6 +330,7 @@ class SimulationWindow(pyglet.window.Window):
                 self.save_engine_performance_data(cursor, self.last_save_id)
                 self.save_paused_points(cursor, self.last_save_id)
                 self.save_throttle_change_points(cursor, self.last_save_id)
+                self.save_engine_load_change_points(cursor, self.last_save_id)
                 conn.commit()
                 conn.close()
 
@@ -408,6 +414,22 @@ class SimulationWindow(pyglet.window.Window):
                 INSERT INTO throttle_change_points (engine_design_id, time, fuel_flow_rate)
                 VALUES (?, ?, ?)
             ''', (engine_design_id, time_point, fuel_flow_rate))
+
+    def save_engine_load_change_points(self, cursor, engine_design_id):
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS engine_load_change_points (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engine_design_id INTEGER,
+                time REAL,
+                engine_load REAL,
+                FOREIGN KEY(engine_design_id) REFERENCES engine_designs(id)
+            )
+        ''')
+        for time_point, engine_load in self.renderer.engine_load_change_points:
+            cursor.execute('''
+                INSERT INTO engine_load_change_points (engine_design_id, time, engine_load)
+                VALUES (?, ?, ?)
+            ''', (engine_design_id, time_point, engine_load))
         
     def delete_record_button(self):
         conn = sqlite3.connect('database.db')
@@ -428,6 +450,7 @@ class SimulationWindow(pyglet.window.Window):
             cursor.execute('DELETE FROM engine_performance_data WHERE engine_design_id = ?', (save_id,))
             cursor.execute('DELETE FROM paused_points WHERE engine_design_id = ?', (save_id,))
             cursor.execute('DELETE FROM throttle_change_points WHERE engine_design_id = ?', (save_id,))
+            cursor.execute('DELETE FROM engine_load_change_points WHERE engine_design_id = ?', (save_id,))
 
     def get_engine_design_entries(self):
         conn = sqlite3.connect('database.db')
@@ -435,7 +458,7 @@ class SimulationWindow(pyglet.window.Window):
         try:
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='engine_designs'")
             if cursor.fetchone() is not None:
-                cursor.execute('SELECT id, configuration_name, crank_radius, crank_mass, rod_length, rod_mass, piston_radius, piston_length, deck_clearance, piston_mass FROM engine_designs')  # Explicitly list columns
+                cursor.execute('SELECT * FROM engine_designs')
                 entries = cursor.fetchall()
             else:
                 raise sqlite3.OperationalError("Table 'engine_designs' does not exist in the database")
@@ -483,13 +506,26 @@ class SimulationWindow(pyglet.window.Window):
         conn.close()
         return points
 
+    def load_engine_load_change_points(self, engine_design_id):
+        conn = sqlite3.connect('database.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT time, engine_load FROM engine_load_change_points
+            WHERE engine_design_id = ?
+        ''', (engine_design_id,))
+        points = cursor.fetchall()
+        conn.close()
+        return points
+
     def load_plot(self, selected_record):
         engine_design_id = selected_record[0]
         data_points = self.load_engine_performance_data(engine_design_id)
         paused_points = self.load_paused_points(engine_design_id)
         throttle_changes = self.load_throttle_change_points(engine_design_id)
+        load_changes = self.load_engine_load_change_points(engine_design_id)
         times, torques, angular_velocities = zip(*data_points)
-        self.renderer.plot_performance(times, torques, angular_velocities, paused_points, throttle_changes, selected_record[1:], engine_design_id)
+        self.renderer.plot_performance(times, torques, angular_velocities, paused_points, 
+                                     throttle_changes, load_changes, selected_record[1:], engine_design_id)
 
     def get_database_entries(self):
         conn = sqlite3.connect('database.db')
