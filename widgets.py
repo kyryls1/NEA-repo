@@ -31,7 +31,7 @@ class ListRow:
         self.label = pyglet.text.Label(str(self.data[1]), x, y, anchor_x='left', anchor_y='center', 
                                        color=(0, 0, 0, 255), batch=batch)
         self.bounding_box = pyglet.shapes.Rectangle(x, y, width, height, color=(200, 200, 220), batch=batch)
-        self.focused = False  # Changed from True to False
+        self.focused = False
 
     def is_mouseover(self, x, y):
         if not self.visible: return False
@@ -82,10 +82,10 @@ class ListTable:
             return
         
         for item in items:
-            if isinstance(item, (list, tuple)) and len(item) > 1:  # Ensure item is sequence with at least 2 elements
+            try:
                 row = ListRow(item, self.bounding_box.x, 0, self.bounding_box.width, self.item_height, self.batch)
                 self.rows.append(row)
-            else:
+            except:
                 print(f"Warning: Skipping invalid record format: {item}")
             
         self.update_row_positions()

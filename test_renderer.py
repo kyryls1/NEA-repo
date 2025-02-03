@@ -11,7 +11,7 @@ import math
 # ...existing code...
 from renderer import Renderer
 from vector import Vector
-from mechanicalComponents import Crank, ConnectorRod, Piston
+from mechanical_components import Crank, ConnectorRod, Piston
 
 class MockBatch:
     pass

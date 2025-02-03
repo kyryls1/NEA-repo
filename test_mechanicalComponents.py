@@ -10,7 +10,7 @@ PARTIAL UNIT TEST TABLE (Crank/ConnectorRod/Piston)
 import unittest
 import math
 # ...existing code...
-from mechanicalComponents import Crank, ConnectorRod, Piston
+from mechanical_components import Crank, ConnectorRod, Piston
 from vector import Vector
 
 class TestMechanicalComponents(unittest.TestCase):
@@ -44,7 +44,7 @@ class TestCrankAdditional(unittest.TestCase):
     def test_subtract_engine_load(self):
         crank = Crank(radius=0.05, mass=2)
         crank.engine_load = 50
-        torque_after_load = crank.subtract_engine_load(100, 0.0)
+        torque_after_load = crank.subtract_engine_load(100)  # Remove unused angle parameter
         self.assertNotEqual(torque_after_load, 100)
     
     def test_calculate_delta_theta(self):

@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from vector import Vector
 from simulation import GasSimulation
-from mechanicalComponents import Crank, ConnectorRod, Piston
+from mechanical_components import Crank, ConnectorRod, Piston
 
 class GasSimulation():
     def __init__(self, crank_radius, connector_rod_length, deck_clearance):

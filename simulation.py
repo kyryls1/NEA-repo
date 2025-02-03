@@ -1,18 +1,19 @@
 import math
-import mechanicalComponents
+import mechanical_components
 from vector import Vector
 
 class GasSimulation():
+    STARTING_RPM = 300
+    COMBUSTION_TEMPERATURE = 2273
+    AMBIENT_TEMPERATURE = 623
+
     def __init__(self, crank_radius, connector_rod_length, deck_clearance):
-        self.combustion_temperature = 2273
-        self.ambient_temperature = 623
         self.moles_after_combustion = 0
         self.moles_before_combustion = 0
-        self.temperature_difference = self.combustion_temperature - self.ambient_temperature
+        self.temperature_difference = self.COMBUSTION_TEMPERATURE - self.AMBIENT_TEMPERATURE
         self.moles_difference = self.moles_after_combustion - self.moles_before_combustion
-        self.cylinder_head_position = Vector(0, crank_radius + connector_rod_length + deck_clearance)
+        self.deck_surface_position = Vector(0, crank_radius + connector_rod_length + deck_clearance)
         self.decompression_valve_open = True
-        self.STARTING_RPM = 300  # RPM at which decompression valve closes
 
     def update_fuel_flow_rate(self, mass_flow_rate):
         self.moles_before_combustion = mass_flow_rate * 9/76
@@ -20,16 +21,15 @@ class GasSimulation():
 
     def get_temperature(self, theta):
         if 0 <= theta < 0.1:
-            return self.combustion_temperature
+            return self.COMBUSTION_TEMPERATURE
         elif 0.1 <= theta <= math.pi:
-            return self.ambient_temperature + (self.temperature_difference) * math.exp(-1.5 * (theta - 0.1))
+            return self.AMBIENT_TEMPERATURE + (self.temperature_difference) * math.exp(-1.5 * (theta - 0.1))
         else:
             multiplier = (theta - math.pi) / math.pi
             increase_amplitude = 0.1 * (self.temperature_difference)
-            return self.ambient_temperature + increase_amplitude * (1 - math.cos(math.pi * multiplier))
+            return self.AMBIENT_TEMPERATURE + increase_amplitude * (1 - math.cos(math.pi * multiplier))
 
     def get_gas_moles(self, theta):
-
         if 0 <= theta < 2:
             return self.moles_after_combustion
         elif 2 <= theta <= 5.2:
@@ -40,7 +40,7 @@ class GasSimulation():
             return self.moles_before_combustion + increase_amplitude * math.sin(multiplier * math.pi/2)
 
     def get_current_deck_clearance(self, piston_position):
-        return self.cylinder_head_position.y - piston_position.y
+        return self.deck_surface_position.y - piston_position.y
     
     def calculate_force(self, theta, piston_position):
         temperature = self.get_temperature(theta)
@@ -56,19 +56,19 @@ class GasSimulation():
         return force
 
 class Simulation():
-    def __init__(self, crank_radius, crank_mass, connector_rod_length, rod_mass, piston_radius, piston_mass, piston_length, deck_clearance): 
-        self.crank = mechanicalComponents.Crank(crank_radius, crank_mass)
-        self.piston = mechanicalComponents.Piston(piston_mass,  piston_radius, piston_length, deck_clearance, crank_radius + connector_rod_length)
-        self.connector_rod = mechanicalComponents.ConnectorRod(rod_mass, connector_rod_length, crank_radius)
-        self.gas_simulation = GasSimulation(crank_radius, connector_rod_length, deck_clearance)
+    FILM_THICKNESS = 3e-6 
+    DYNAMIC_VISCOSITY = 0.01
+    PISTON_RING_GRADIENT_COEFFICIENT = -2.5
+    PISTON_SKIRT_GRADIENT_COEFFICIENT = -2.1
 
-        self.film_thickness = 3e-6 
-        self.dynamic_viscosity = 0.01
-        self.piston_ring_gradient_coefficient = -2.5
-        self.piston_skirt_gradient_coefficient = -2.1
-        self.PISTON_RING_AREA = 2 * (2 * math.pi * self.piston.RADIUS * 0.002)
-        self.PISTON_SKIRT_AREA = self.piston.SURFACE_AREA - self.PISTON_RING_AREA
-        self.COMPONENT_WEIGHT = (rod_mass + piston_mass) * 9.81
+    def __init__(self, crank_radius, crank_mass, connector_rod_length, rod_mass, piston_radius, piston_mass, piston_length, deck_clearance): 
+        self.crank = mechanical_components.Crank(crank_radius, crank_mass)
+        self.piston = mechanical_components.Piston(piston_mass,  piston_radius, piston_length, deck_clearance, crank_radius + connector_rod_length)
+        self.connector_rod = mechanical_components.ConnectorRod(rod_mass, connector_rod_length, crank_radius)
+        self.gas_simulation = GasSimulation(crank_radius, connector_rod_length, deck_clearance)
+        self.piston_ring_area = 2 * (2 * math.pi * self.piston.radius * 0.002)
+        self.piston_skirt_area = self.piston.surface_area - self.piston_ring_area
+        self.component_weight = (rod_mass + piston_mass) * 9.81
 
     def toggle_starter_motor(self):
         self.crank.starter_motor_on = not self.crank.starter_motor_on
@@ -82,7 +82,7 @@ class Simulation():
     def update_all(self, dt):
         gas_force = self.gas_simulation.calculate_force(self.crank.angle_radians, self.piston.position)
         friction_force = self.calculate_friction()
-        total_force = gas_force + self.COMPONENT_WEIGHT - friction_force
+        total_force = gas_force + self.component_weight - friction_force
         rod_direction_vector = self.find_rod_direction_vector()
         force_parallel_to_rod = self.transfer_force_to_rod(total_force, rod_direction_vector)
         force_tangent_to_crank = self.transfer_force_to_crank(force_parallel_to_rod, rod_direction_vector)
@@ -99,12 +99,12 @@ class Simulation():
         return dynamic_viscosity * velocity_gradient
 
     def calculate_friction(self):
-        ring_pressure_gradient = self.calculate_pressure_gradient(self.dynamic_viscosity, self.film_thickness, self.piston_ring_gradient_coefficient)
-        ring_shear_stress = 0.5 * self.film_thickness * ring_pressure_gradient + self.dynamic_viscosity * self.piston.velocity / self.film_thickness
-        ring_friction = ring_shear_stress * self.PISTON_RING_AREA
-        skirt_pressure_gradient = self.calculate_pressure_gradient(self.dynamic_viscosity, self.film_thickness, self.piston_skirt_gradient_coefficient)
-        skirt_shear_stress = 0.5 * self.film_thickness * skirt_pressure_gradient + self.dynamic_viscosity * self.piston.velocity / self.film_thickness
-        skirt_friction = skirt_shear_stress * self.PISTON_SKIRT_AREA
+        ring_pressure_gradient = self.calculate_pressure_gradient(self.DYNAMIC_VISCOSITY, self.FILM_THICKNESS, self.PISTON_RING_GRADIENT_COEFFICIENT)
+        ring_shear_stress = 0.5 * self.FILM_THICKNESS * ring_pressure_gradient + self.DYNAMIC_VISCOSITY * self.piston.velocity / self.FILM_THICKNESS
+        ring_friction = ring_shear_stress * self.piston_ring_area
+        skirt_pressure_gradient = self.calculate_pressure_gradient(self.DYNAMIC_VISCOSITY, self.FILM_THICKNESS, self.PISTON_SKIRT_GRADIENT_COEFFICIENT)
+        skirt_shear_stress = 0.5 * self.FILM_THICKNESS * skirt_pressure_gradient + self.DYNAMIC_VISCOSITY * self.piston.velocity / self.FILM_THICKNESS
+        skirt_friction = skirt_shear_stress * self.piston_skirt_area
 
         return ring_friction + skirt_friction
 

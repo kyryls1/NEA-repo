@@ -1,4 +1,3 @@
-
 """
 PARTIAL UNIT TEST TABLE (LinkedList)
 | Test # | Tested function  | Input data                 | Data type | Expected output                              | Predicted explanation                                   | Actual output | Pass/Fail |

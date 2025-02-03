@@ -11,7 +11,7 @@ class LinkedList:
 
     def append(self, data):
         new_node = Node(data)
-        if self.tail:
+        if self.tail is not None:
             self.tail.next = new_node
         else:
             self.head = new_node
@@ -20,7 +20,7 @@ class LinkedList:
 
     def __iter__(self):
         current = self.head
-        while current:
+        while current is not None:
             yield current.data
             current = current.next
 
