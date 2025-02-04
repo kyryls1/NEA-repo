@@ -92,106 +92,133 @@ class Renderer:
 
     @staticmethod
     def run_plot(times, torques, rpms, paused_points, throttle_changes, engine_load_changes, parameters):
-        fig, (config_parameters, torque_axis, rpm_axis) = plt.subplots(3, 1, figsize=(10, 8), gridspec_kw={'height_ratios': [0.15, 1, 1]})
-        
-        fig.canvas.manager.window.resizable(False, False)
-        fig.canvas.manager.set_window_title(parameters[0])
-        
-        config_parameters.axis('off')
-        configuration_parameters = (
-            f"Simulation Parameters\n"
-            f"Crank:  Radius = {parameters[1]} mm,  Mass = {parameters[2]} kg\n"
-            f"Rod:  Length = {parameters[3]} mm,  Mass = {parameters[4]} kg\n"
-            f"Piston:  Radius = {parameters[5]} mm,  Mass = {parameters[7]} kg,  Length = {parameters[6]} mm,  Deck Clearance = {parameters[8]} mm"
-        )
+        # Initial error handling to catch easily identifiable issues
+        try:
+            if not (len(times) == len(torques) == len(rpms)):
+                raise ValueError("Mismatched lengths in plot data arrays")
 
-        config_parameters.text(0.5, 0.5, configuration_parameters,
-            transform=config_parameters.transAxes,
-            fontsize=10,
-            verticalalignment='center',
-            horizontalalignment='center',
-            bbox=dict(facecolor='white', alpha=0.7, boxstyle='round,pad=0.5')
-        )
-        
-        torque_axis.plot(times, torques, color='lightblue', linewidth=1, label='Torque')
-        torque_axis.set_ylabel('Torque (N·m)')
-        torque_axis.set_title('Engine Torque')
-        torque_axis.grid(True, alpha=0.3)
-        
-        rpm_axis.plot(times, rpms, color='orange', linewidth=1, label='RPM')
-        rpm_axis.set_xlabel('Time (s)')
-        rpm_axis.set_ylabel('Engine Speed (RPM)')
-        rpm_axis.set_title('Engine Speed')
-        rpm_axis.grid(True, alpha=0.3)
-        
-        lines1, lines2 = [], []
-        labels1, labels2 = [], []
-        
-        for time_point in paused_points:
+            if not isinstance(parameters, (list, tuple)) or len(parameters) < 9:
+                raise ValueError("Invalid parameters format")
 
-            line1 = torque_axis.axvline(x=time_point, color='r', linestyle='--', alpha=0.5)
-            line2 = rpm_axis.axvline(x=time_point, color='r', linestyle='--', alpha=0.5)
-            if not lines1:
-                lines1.append(line1)
-                lines2.append(line2)
-                labels1.append('Simulation Paused')
-                labels2.append('Simulation Paused')
+        except Exception as e:
+            print(f"Error plotting graph: {str(e)}")
+            if 'process' in locals():
+                process.terminate()
+                process.join()
+
+            return
+
+        # Additional error handling to catch errors within data arrays
+        try:
+            fig, (config_parameters, torque_axis, rpm_axis) = plt.subplots(3, 1, figsize=(10, 8), gridspec_kw={'height_ratios': [0.15, 1, 1]})
             
-        for time_point, fuel_mass in throttle_changes:
-            torque_axis.axvline(x=time_point, color='g', linestyle='-.', alpha=0.5)
-            rpm_axis.axvline(x=time_point, color='g', linestyle='-.', alpha=0.5)
-            torque_axis.annotate(
-                f'F: {fuel_mass}g',
-                xy=(time_point, 0.82),
-                xycoords=torque_axis.get_xaxis_transform(),
-                xytext=(5, 0),
-                textcoords='offset points',
-                rotation=90,
-                color='g',
-                va='center',
-                fontsize=8
-            )
-            rpm_axis.annotate(
-                f'F: {fuel_mass}g',
-                xy=(time_point, 0.82),
-                xycoords=rpm_axis.get_xaxis_transform(),
-                xytext=(5, 0),
-                textcoords='offset points',
-                rotation=90,
-                color='g',
-                va='center',
-                fontsize=8
+            fig.canvas.manager.window.resizable(False, False)
+            fig.canvas.manager.set_window_title(parameters[0])
+            
+            config_parameters.axis('off')
+            configuration_parameters = (
+                f"Simulation Parameters\n"
+                f"Crank:  Radius = {parameters[1]} mm,  Mass = {parameters[2]} kg\n"
+                f"Rod:  Length = {parameters[3]} mm,  Mass = {parameters[4]} kg\n"
+                f"Piston:  Radius = {parameters[5]} mm,  Mass = {parameters[7]} kg,  Length = {parameters[6]} mm,  Deck Clearance = {parameters[8]} mm"
             )
 
-        for time_point, load in engine_load_changes:
-            torque_axis.axvline(x=time_point, color='b', linestyle='-.', alpha=0.5)
-            rpm_axis.axvline(x=time_point, color='b', linestyle='-.', alpha=0.5)
-            torque_axis.annotate(
-                f'L: {load}W',
-                xy=(time_point, 0.82),
-                xycoords=torque_axis.get_xaxis_transform(),
-                xytext=(5, 0),
-                textcoords='offset points',
-                rotation=90,
-                color='b',
-                va='center',
-                fontsize=8
+            config_parameters.text(0.5, 0.5, configuration_parameters,
+                transform=config_parameters.transAxes,
+                fontsize=10,
+                verticalalignment='center',
+                horizontalalignment='center',
+                bbox=dict(facecolor='white', alpha=0.7, boxstyle='round,pad=0.5')
             )
-            rpm_axis.annotate(
-                f'L: {load}W',
-                xy=(time_point, 0.82),
-                xycoords=rpm_axis.get_xaxis_transform(),
-                xytext=(5, 0),
-                textcoords='offset points',
-                rotation=90,
-                color='b',
-                va='center',
-                fontsize=8
-            )
+            
+            torque_axis.plot(times, torques, color='lightblue', linewidth=1, label='Torque')
+            torque_axis.set_ylabel('Torque (N·m)')
+            torque_axis.set_title('Engine Torque')
+            torque_axis.grid(True, alpha=0.3)
+            
+            rpm_axis.plot(times, rpms, color='orange', linewidth=1, label='RPM')
+            rpm_axis.set_xlabel('Time (s)')
+            rpm_axis.set_ylabel('Engine Speed (RPM)')
+            rpm_axis.set_title('Engine Speed')
+            rpm_axis.grid(True, alpha=0.3)
+            
+            lines1, lines2 = [], []
+            labels1, labels2 = [], []
+            
+            for time_point in paused_points:
 
-        plt.tight_layout()
-        plt.show()
-        plt.close(fig)
+                line1 = torque_axis.axvline(x=time_point, color='r', linestyle='--', alpha=0.5)
+                line2 = rpm_axis.axvline(x=time_point, color='r', linestyle='--', alpha=0.5)
+                if not lines1:
+                    lines1.append(line1)
+                    lines2.append(line2)
+                    labels1.append('Simulation Paused')
+                    labels2.append('Simulation Paused')
+                
+            for time_point, fuel_mass in throttle_changes:
+                torque_axis.axvline(x=time_point, color='g', linestyle='-.', alpha=0.5)
+                rpm_axis.axvline(x=time_point, color='g', linestyle='-.', alpha=0.5)
+                torque_axis.annotate(
+                    f'F: {fuel_mass}g',
+                    xy=(time_point, 0.82),
+                    xycoords=torque_axis.get_xaxis_transform(),
+                    xytext=(5, 0),
+                    textcoords='offset points',
+                    rotation=90,
+                    color='g',
+                    va='center',
+                    fontsize=8
+                )
+                rpm_axis.annotate(
+                    f'F: {fuel_mass}g',
+                    xy=(time_point, 0.82),
+                    xycoords=rpm_axis.get_xaxis_transform(),
+                    xytext=(5, 0),
+                    textcoords='offset points',
+                    rotation=90,
+                    color='g',
+                    va='center',
+                    fontsize=8
+                )
+
+            for time_point, load in engine_load_changes:
+                torque_axis.axvline(x=time_point, color='b', linestyle='-.', alpha=0.5)
+                rpm_axis.axvline(x=time_point, color='b', linestyle='-.', alpha=0.5)
+                torque_axis.annotate(
+                    f'L: {load}W',
+                    xy=(time_point, 0.82),
+                    xycoords=torque_axis.get_xaxis_transform(),
+                    xytext=(5, 0),
+                    textcoords='offset points',
+                    rotation=90,
+                    color='b',
+                    va='center',
+                    fontsize=8
+                )
+                rpm_axis.annotate(
+                    f'L: {load}W',
+                    xy=(time_point, 0.82),
+                    xycoords=rpm_axis.get_xaxis_transform(),
+                    xytext=(5, 0),
+                    textcoords='offset points',
+                    rotation=90,
+                    color='b',
+                    va='center',
+                    fontsize=8
+                )
+
+            plt.tight_layout()
+            plt.show()
+            plt.close(fig)
+        except Exception as e:
+            print(f"Error plotting graph: {str(e)}")
+            if 'fig' in locals():
+                plt.close(fig)
+            if 'process' in locals():
+                process.terminate()
+                process.join()
+                
+            return
 
     def close_plot(self, engine_design_id):
         if engine_design_id in self.open_design_plots:

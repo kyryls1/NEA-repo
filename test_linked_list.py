@@ -1,33 +1,32 @@
+from linked_list import LinkedList, Node
+
 """
-PARTIAL UNIT TEST TABLE (LinkedList)
-| Test # | Tested function  | Input data                 | Data type | Expected output                              | Predicted explanation                                   | Actual output | Pass/Fail |
-|--------|------------------|----------------------------|-----------|----------------------------------------------|---------------------------------------------------------|--------------|----------|
-| 1      | append           | Data = 42                 | Integer   | LinkedList size increases by 1, tail = 42    | The append method should link a new node at the end.    |              |          |
-| 2      | __len__ (length) | - (after some appends)    | -         | Correct integer length of the linked list    | Should return expected list size, ignoring any extras.   |              |          |
+test_node = Node(None)
+assert test_node.data == None
+assert test_node.next == None
+print(test_node.data)
+print(test_node.next)
+print("Unit test passed")
+
+test_linked_list = LinkedList()
+assert test_linked_list.head == None
+assert test_linked_list.tail == None
+assert test_linked_list.size == 0
+print(test_linked_list.head)
+print(test_linked_list.tail)
+print(test_linked_list.size)
+print("Unit test passed")
 """
 
-import unittest
-# ...existing code...
-from linked_list import LinkedList
-
-class TestLinkedList(unittest.TestCase):
-    def test_append_and_len(self):
-        ll = LinkedList()
-        self.assertEqual(len(ll), 0)    # initially empty
-        ll.append(42)
-        self.assertEqual(len(ll), 1)    # size should now be 1
-        ll.append(100)
-        self.assertEqual(len(ll), 2)    # size should now be 2
-        # (Predicted explanation: LinkedList grows with each append)
-
-    def test_iter(self):
-        ll = LinkedList()
-        data_items = [10, 20, 30]
-        for item in data_items:
-            ll.append(item)
-        collected = [val for val in ll] # test __iter__
-        self.assertListEqual(collected, data_items)
-        # (Predicted explanation: iteration traverses all appended nodes)
-
-if __name__ == '__main__':
-    unittest.main()
+test_linked_list = LinkedList()
+test_linked_list.append(1)
+test_linked_list.append(2)
+assert test_linked_list.head.data == 1
+assert test_linked_list.tail.data == 2
+assert test_linked_list.tail.next == None
+assert test_linked_list.head.next == test_linked_list.tail
+assert test_linked_list.size == 2
+print(test_linked_list.head.data)
+print(test_linked_list.head.next)
+print(test_linked_list.size)
+print("Unit test passed")

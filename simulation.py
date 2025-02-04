@@ -2,7 +2,7 @@ import math
 import mechanical_components
 from vector import Vector
 
-class GasSimulation():
+class GasSimulation:
     STARTING_RPM = 300
     COMBUSTION_TEMPERATURE = 2273
     AMBIENT_TEMPERATURE = 623
@@ -14,10 +14,11 @@ class GasSimulation():
         self.moles_difference = self.moles_after_combustion - self.moles_before_combustion
         self.deck_surface_position = Vector(0, crank_radius + connector_rod_length + deck_clearance)
         self.decompression_valve_open = True
+        self.increase_amplitude = 0.03 * (self.moles_difference)
 
     def update_fuel_flow_rate(self, mass_flow_rate):
-        self.moles_before_combustion = mass_flow_rate * 9/76
-        self.moles_after_combustion = mass_flow_rate * 17/114
+        self.moles_before_combustion = mass_flow_rate * 27/228.46
+        self.moles_after_combustion = mass_flow_rate * 34/228.46
 
     def get_temperature(self, theta):
         if 0 <= theta < 0.1:
@@ -36,8 +37,7 @@ class GasSimulation():
             return self.moles_before_combustion + (self.moles_difference) * math.exp(-2.2 * (theta - 2))
         else:
             multiplier = (theta - 5.2) / (2*math.pi - 5.2)
-            increase_amplitude = 0.03 * (self.moles_difference)
-            return self.moles_before_combustion + increase_amplitude * math.sin(multiplier * math.pi/2)
+            return self.moles_before_combustion + self.increase_amplitude * math.sin(multiplier * math.pi/2)
 
     def get_current_deck_clearance(self, piston_position):
         return self.deck_surface_position.y - piston_position.y
@@ -52,7 +52,7 @@ class GasSimulation():
         else:
             pressure = mols * 8.31 * temperature
             
-        force = pressure/gas_volume_height
+        force = pressure / gas_volume_height
         return force
 
 class Simulation():
@@ -66,7 +66,7 @@ class Simulation():
         self.piston = mechanical_components.Piston(piston_mass,  piston_radius, piston_length, deck_clearance, crank_radius + connector_rod_length)
         self.connector_rod = mechanical_components.ConnectorRod(rod_mass, connector_rod_length, crank_radius)
         self.gas_simulation = GasSimulation(crank_radius, connector_rod_length, deck_clearance)
-        self.piston_ring_area = 2 * (2 * math.pi * self.piston.radius * 0.002)
+        self.piston_ring_area = 2 * (2*math.pi * self.piston.radius * 0.002)
         self.piston_skirt_area = self.piston.surface_area - self.piston_ring_area
         self.component_weight = (rod_mass + piston_mass) * 9.81
 
@@ -120,12 +120,12 @@ class Simulation():
     def transfer_force_to_rod(self, force, rod_direction_vector):
         piston_to_rod_angle = rod_direction_vector.angle_between(Vector(0, 1))
 
-        return force/math.cos(piston_to_rod_angle)
+        return force / math.cos(piston_to_rod_angle)
  
     def transfer_force_to_crank(self, force, rod_direction_vector):
-        normalised_angle = (-self.crank.angle_radians + math.pi/2) % (2 * math.pi)
+        normalised_angle = (-self.crank.angle_radians + math.pi/2) % (2*math.pi)
         normal_to_crank_motion = self.find_normal_to_crank_motion(normalised_angle)
-        rod_to_crank_angle = 3 * math.pi / 2 - normal_to_crank_motion.angle_between(rod_direction_vector)
+        rod_to_crank_angle = 3/2 * math.pi - normal_to_crank_motion.angle_between(rod_direction_vector)
 
         if self.crank.angle_radians < math.pi:
             return -math.cos(rod_to_crank_angle) * force
