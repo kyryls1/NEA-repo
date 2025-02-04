@@ -17,7 +17,7 @@ print(test_linked_list.tail)
 print(test_linked_list.size)
 print("Unit test passed")
 """
-
+"""
 test_linked_list = LinkedList()
 test_linked_list.append(1)
 test_linked_list.append(2)
@@ -29,4 +29,26 @@ assert test_linked_list.size == 2
 print(test_linked_list.head.data)
 print(test_linked_list.head.next)
 print(test_linked_list.size)
+print("Unit test passed")
+
+test_linked_list = LinkedList()
+test_linked_list.append(1)
+test_linked_list.append("test")
+test_linked_list.append(None)
+iter_count = 0
+for node in test_linked_list:
+    iter_count += 1
+    print(node)
+
+assert iter_count == 3
+print(iter_count)
+print("Unit test passed")
+"""
+test_linked_list = LinkedList()
+test_linked_list.append(1)
+test_linked_list.append(2)
+test_linked_list.append(3)
+length = len(test_linked_list)
+assert length == 3
+print(length)
 print("Unit test passed")
