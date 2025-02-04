@@ -13,7 +13,7 @@ class Crank:
         self.starter_motor_on = False
         self.angular_velocity = 0
         self.angle_radians = 0
-        self.instantaneous_torque = 0  # Fixed spelling
+        self.instantaneous_torque = 0
         self.total_torque = 0
 
     def update_engine_load(self, load):
