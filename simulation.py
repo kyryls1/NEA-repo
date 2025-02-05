@@ -2,33 +2,40 @@ import math
 import mechanical_components
 from vector import Vector
 
+PI = math.pi
+PI_OVER_TWO = PI / 2
+THREE_OVER_TWO_PI = 3 * PI / 2
+TWO_PI = 2 * PI
+
 class GasSimulation:
     STARTING_RPM = 300
     COMBUSTION_TEMPERATURE = 2273
     AMBIENT_TEMPERATURE = 623
+    TEMPERATURE_DIFFERENCE = 1750
 
     def __init__(self, crank_radius, connector_rod_length, deck_clearance):
         self.moles_after_combustion = 0
         self.moles_before_combustion = 0
-        self.temperature_difference = self.COMBUSTION_TEMPERATURE - self.AMBIENT_TEMPERATURE
-        self.moles_difference = self.moles_after_combustion - self.moles_before_combustion
+        self.moles_difference = 0
+        self.increase_amplitude = 0
         self.deck_surface_position = Vector(0, crank_radius + connector_rod_length + deck_clearance)
         self.decompression_valve_open = True
-        self.increase_amplitude = 0.03 * (self.moles_difference)
 
     def update_fuel_flow_rate(self, mass_flow_rate):
         self.moles_before_combustion = mass_flow_rate * 27/228.46
         self.moles_after_combustion = mass_flow_rate * 34/228.46
+        self.moles_difference = self.moles_after_combustion - self.moles_before_combustion
+        self.increase_amplitude = 0.03 * (self.moles_difference)
 
     def get_temperature(self, theta):
         if 0 <= theta < 0.1:
             return self.COMBUSTION_TEMPERATURE
-        elif 0.1 <= theta <= math.pi:
-            return self.AMBIENT_TEMPERATURE + (self.temperature_difference) * math.exp(-1.5 * (theta - 0.1))
+        elif 0.1 <= theta <= PI:
+            return self.AMBIENT_TEMPERATURE + (self.TEMPERATURE_DIFFERENCE) * math.exp(-1.5 * (theta - 0.1))
         else:
-            multiplier = (theta - math.pi) / math.pi
-            increase_amplitude = 0.1 * (self.temperature_difference)
-            return self.AMBIENT_TEMPERATURE + increase_amplitude * (1 - math.cos(math.pi * multiplier))
+            multiplier = (theta - PI) / PI
+            increase_amplitude = 0.1 * (self.TEMPERATURE_DIFFERENCE)
+            return self.AMBIENT_TEMPERATURE + increase_amplitude * (1 - math.cos(PI * multiplier))
 
     def get_gas_moles(self, theta):
         if 0 <= theta < 2:
@@ -36,8 +43,8 @@ class GasSimulation:
         elif 2 <= theta <= 5.2:
             return self.moles_before_combustion + (self.moles_difference) * math.exp(-2.2 * (theta - 2))
         else:
-            multiplier = (theta - 5.2) / (2*math.pi - 5.2)
-            return self.moles_before_combustion + self.increase_amplitude * math.sin(multiplier * math.pi/2)
+            multiplier = (theta - 5.2) / (TWO_PI - 5.2)
+            return self.moles_before_combustion + self.increase_amplitude * math.sin(multiplier * PI_OVER_TWO)
 
     def get_current_deck_clearance(self, piston_position):
         return self.deck_surface_position.y - piston_position.y
@@ -109,7 +116,7 @@ class Simulation():
         return ring_friction + skirt_friction
 
     def find_normal_to_crank_motion(self, theta):
-        if theta == math.pi/2:
+        if theta == PI_OVER_TWO:
             return Vector(0, 1)
         else:
             return Vector(1, math.tan(theta))
@@ -123,11 +130,11 @@ class Simulation():
         return force / math.cos(piston_to_rod_angle)
  
     def transfer_force_to_crank(self, force, rod_direction_vector):
-        normalised_angle = (-self.crank.angle_radians + math.pi/2) % (2*math.pi)
+        normalised_angle = (-self.crank.angle_radians + PI_OVER_TWO) % TWO_PI
         normal_to_crank_motion = self.find_normal_to_crank_motion(normalised_angle)
-        rod_to_crank_angle = 3/2 * math.pi - normal_to_crank_motion.angle_between(rod_direction_vector)
+        rod_to_crank_angle = THREE_OVER_TWO_PI - normal_to_crank_motion.angle_between(rod_direction_vector)
 
-        if self.crank.angle_radians < math.pi:
+        if self.crank.angle_radians < PI:
             return -math.cos(rod_to_crank_angle) * force
         else:
             return math.cos(rod_to_crank_angle) * force

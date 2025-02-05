@@ -7,6 +7,9 @@ test_gas = GasSimulation(0.05, 0.15, 0.03)
 theta_points = np.linspace(0, 4*math.pi, 2000)
 temperatures = [test_gas.get_temperature(theta % (2*math.pi)) for theta in theta_points]
 
+assert len(temperatures) == len(theta_points)
+print(len(temperatures))
+
 plt.figure(figsize=(10, 6))
 plt.plot(np.degrees(theta_points), temperatures, color='red')
 plt.xlabel('Crank Angle (Degrees)')
@@ -27,9 +30,11 @@ plt.show()
 """
 # Test gas moles curve over two cycles
 test_gas = GasSimulation(0.05, 0.15, 0.03)
-test_gas.update_fuel_flow_rate(0.02)  # Initialize with fixed test value
 theta_points = np.linspace(0, 4*math.pi, 2000)
 moles = [test_gas.get_gas_moles(theta % (2*math.pi)) for theta in theta_points]
+
+assert len(moles) == len(theta_points)
+print(len(moles))
 
 plt.figure(figsize=(10, 6))
 plt.plot(np.degrees(theta_points), moles, color='red')
@@ -39,7 +44,7 @@ plt.title('Gas Moles Over Two Engine Cycles')
 plt.grid(True)
 
 key_angles = [0, 180, 360, 540, 720]
-for angle in key_angles:
+for angle in key_angles: 
     plt.axvline(x=angle, color='blue', linestyle='--', alpha=0.5)
     y_mid = (plt.ylim()[0] + plt.ylim()[1]) / 2
     if angle in [0, 360, 720]:
@@ -48,6 +53,3 @@ for angle in key_angles:
         plt.text(angle+5, y_mid, 'BDC', rotation=90, verticalalignment='center')
 
 plt.show()
-
-print("Gas moles curve plotted successfully")
-print("Unit test passed")

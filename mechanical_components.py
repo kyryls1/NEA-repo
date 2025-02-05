@@ -1,6 +1,8 @@
 import math
 from vector import Vector
 
+PI = math.pi
+TWO_PI = 2 * PI
 
 class Crank:
     STARTER_MOTOR_TORQUE = 20
@@ -26,7 +28,7 @@ class Crank:
         return self.angular_velocity * dt
 
     def update_angle(self, delta_theta):
-        self.angle_radians = (self.angle_radians + delta_theta) / (2 * math.pi)
+        self.angle_radians = (self.angle_radians + delta_theta) % TWO_PI
 
     def update_angular_velocity(self, torque, dt):
         angular_momentum_change = torque * dt
@@ -50,7 +52,7 @@ class Crank:
         self.update_angle(self.calculate_delta_theta(dt))
 
     def get_rpm(self):
-        return self.angular_velocity * 60 / (2 * math.pi)
+        return self.angular_velocity * 60 / TWO_PI
 
 
 class ConnectorRod:
