@@ -9,7 +9,7 @@ import re
 
 class SimulationWindow(pyglet.window.Window):
     PARAMETER_CONSTRAINTS = {
-        'fuel_flow': {'min': 0, 'max': 1, 'name': 'Fuel flow'},
+        'fuel_flow': {'min': 0, 'max': 1, 'name': 'Fuel flow rate'},
         'crank_radius': {'min': 15, 'max': 60, 'name': 'Crank radius'},
         'crank_mass': {'min': 1, 'max': 30, 'name': 'Crank mass'},
         'rod_length': {'min': 50, 'max': 140, 'name': 'Rod length'},

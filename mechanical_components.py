@@ -54,7 +54,6 @@ class Crank:
     def get_rpm(self):
         return self.angular_velocity * 60 / TWO_PI
 
-
 class ConnectorRod:
     def __init__(self, mass, length, crank_radius_offset):
         self.mass = mass
@@ -82,7 +81,6 @@ class ConnectorRod:
     def update(self, delta_theta):
         self.update_crank_anchor_position(delta_theta)
         self.update_piston_anchor_position()
-
 
 class Piston:
     def __init__(self, mass, radius, length, deck_clearance, rod_offset):
