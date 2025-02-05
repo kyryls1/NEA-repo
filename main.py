@@ -331,7 +331,7 @@ class SimulationWindow(pyglet.window.Window):
                 if self.button_widgets[3].label.text == "Overwrite Last Save":
                     self.delete_record(cursor, self.last_save_id)
                     conn.commit()
-                    self.record_table.update_table(self.get_engine_design_entries())
+                    self.record_table.insert_rows(self.get_engine_design_entries())
                 else:
                     self.button_widgets[3].label.text = "Overwrite Last Save"
 
@@ -344,7 +344,7 @@ class SimulationWindow(pyglet.window.Window):
                 conn.commit()
                 conn.close()
 
-                self.record_table.update_table(self.get_engine_design_entries())
+                self.record_table.insert_rows(self.get_engine_design_entries())
                 self.parameter_input_widgets[10].document.text = ""
 
     def load_config_button(self):
@@ -364,7 +364,7 @@ class SimulationWindow(pyglet.window.Window):
             self.delete_record(cursor, focused_row_id)
             conn.commit()
             conn.close()
-            self.record_table.update_table(self.get_engine_design_entries())
+            self.record_table.insert_rows(self.get_engine_design_entries())
 
     # Database Functions
     def save_configuration(self, cursor, configuration_name, *parameters):

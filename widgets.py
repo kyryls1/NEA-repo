@@ -5,13 +5,15 @@ class Button:
     def __init__(self, label, x, y, width, height, callback, batch):
         label_x = x + width/2
         label_y = y + height/2
-        self.label = pyglet.text.Label(label, label_x, label_y, anchor_x='center', anchor_y='center', color = (0, 0, 0), batch=batch)
+        self.bounding_box_right_boundary = x + width
+        self.bounding_box_top_boundary = y + height
+        self.label = pyglet.text.Label(label, label_x, label_y, anchor_x='center', anchor_y='center', color=(0, 0, 0), batch=batch)
         self.bounding_box = pyglet.shapes.Rectangle(x, y, width, height, color=(200, 200, 220), batch=batch)
         self.callback = callback
 
     def is_mouseover(self, x, y):
-        is_within_horizontal_bounds = self.bounding_box.x < x < self.bounding_box.x + self.bounding_box.width
-        is_within_vertical_bounds = self.bounding_box.y < y < self.bounding_box.y + self.bounding_box.height
+        is_within_horizontal_bounds = self.bounding_box.x < x < self.bounding_box_right_boundary
+        is_within_vertical_bounds = self.bounding_box.y < y < self.bounding_box_top_boundary
 
         return is_within_horizontal_bounds and is_within_vertical_bounds
     
@@ -32,12 +34,14 @@ class ListRow:
                                        color=(0, 0, 0, 255), batch=batch)
         self.bounding_box = pyglet.shapes.Rectangle(x, y, width, height, color=(200, 200, 220), batch=batch)
         self.focused = False
+        self.bounding_box_right_boundary = x + width
+        self.bounding_box_top_boundary = y + height
 
     def is_mouseover(self, x, y):
         if not self.visible: return False
         
-        is_within_horizontal_bounds = self.bounding_box.x < x < self.bounding_box.x + self.bounding_box.width
-        is_within_vertical_bounds = self.bounding_box.y < y < self.bounding_box.y + self.bounding_box.height
+        is_within_horizontal_bounds = self.bounding_box.x < x < self.bounding_box_right_boundary
+        is_within_vertical_bounds = self.bounding_box.y < y < self.bounding_box_top_boundary
 
         return is_within_horizontal_bounds and is_within_vertical_bounds
     
@@ -66,70 +70,30 @@ class ListTable:
         self.batch = batch
         self.items_data = items
         self.bounding_box = pyglet.shapes.Rectangle(x, y, width, height, color=(200, 200, 220), batch=batch)
+        self.bounding_box_right_boundary = x + width
+        self.bounding_box_top_boundary = y + height
+        self.row_x = x + 20
+        self.row_height = 30
         self.scroll_offset = 0
-        self.item_height = 30
-        self.padding = 20
-        self.visible_count = height // self.item_height
+        self.visible_count = height // self.row_height
         self.last_click_time = 0
-        self.focused_row = None
-        self.update_table(items)
+        self.insert_rows(items)
 
-    def update_table(self, items):
+    def insert_rows(self, items):
         self.focused_row = None
         self.rows = []
         if items is None:
-            print("Error: No data received from database.")
+            print("Warning: No data received from database.")
             return
         
         for item in items:
             try:
-                row = ListRow(item, self.bounding_box.x, 0, self.bounding_box.width, self.item_height, self.batch)
+                row = ListRow(item, self.row_x, 0, self.bounding_box.width, self.row_height, self.batch)
                 self.rows.append(row)
             except:
                 print(f"Warning: Skipping invalid record format: {item}")
             
         self.update_row_positions()
-
-    def on_mouse_motion(self, x, y):
-        for row in self.rows:
-            row.set_hover(x, y)
-
-    def on_mouse_press(self, x, y):
-        for row in self.rows:
-            if row.is_mouseover(x, y):
-                clicked_row = row
-                current_time = time.perf_counter()
-                if (clicked_row == self.focused_row and current_time - self.last_click_time < 0.5):
-                    self.last_click_time = current_time
-                    if self.focused_row:
-                        self.focused_row.toggle_focus()
-                        self.focused_row = None
-                    return row.data
-                
-                self.last_click_time = current_time
-                if self.focused_row is not None: 
-                    self.focused_row.toggle_focus()
-
-                self.focused_row = row
-                self.focused_row.toggle_focus()
-                return None
-
-        if self.focused_row:
-            self.focused_row.toggle_focus()
-            self.focused_row = None
-        return None
-    
-    def on_mouse_scroll(self, x, y, _scroll_x, scroll_y):
-        if self.is_mouseover_table(x, y):
-            max_offset = max(0, len(self.rows) - self.visible_count)
-            self.scroll_offset = min(max(0, self.scroll_offset - int(scroll_y)), max_offset)
-            self.update_row_positions()
-    
-    def is_mouseover_table(self, x, y):
-        is_within_horizontal_bounds = self.bounding_box.x < x < self.bounding_box.x + self.bounding_box.width
-        is_within_vertical_bounds = self.bounding_box.y < y < self.bounding_box.y + self.bounding_box.height
-
-        return is_within_horizontal_bounds and is_within_vertical_bounds
 
     def update_row_positions(self):
         start_index = self.scroll_offset
@@ -142,34 +106,75 @@ class ListTable:
                 continue
             
             row.set_visible(True)
-            row_y = current_y - self.item_height
-            row.bounding_box.x = self.bounding_box.x
+            row_y = current_y - self.row_height
             row.bounding_box.y = row_y
-            row.label.x = self.bounding_box.x + self.padding
-            row.label.y = row_y + self.item_height // 2
-            current_y -= self.item_height
+            row.label.y = row_y + self.row_height // 2
+            current_y -= self.row_height
 
     def get_focused_data(self):
         if self.focused_row is not None:
             return self.focused_row.data
         else:
             return None
+        
+    def on_mouse_motion(self, x, y):
+        for row in self.rows:
+            row.set_hover(x, y)
+
+    def on_mouse_press(self, x, y):
+        for row in self.rows:
+            if row.is_mouseover(x, y):
+                clicked_row = row
+                current_time = time.perf_counter()
+                if (clicked_row == self.focused_row and current_time - self.last_click_time < 0.5):
+                    self.last_click_time = current_time
+                    focused_row_data = self.get_focused_data()
+                    if focused_row_data is not None:
+                        self.focused_row.toggle_focus()
+                        self.focused_row = None
+                        return focused_row_data
+                
+                self.last_click_time = current_time
+                if self.focused_row is not None: 
+                    self.focused_row.toggle_focus()
+
+                self.focused_row = row
+                self.focused_row.toggle_focus()
+                return None
+
+        if self.focused_row:
+            self.focused_row.toggle_focus()
+            self.focused_row = None
+
+        return None
+    
+    def on_mouse_scroll(self, x, y, _scroll_x, scroll_y):
+        if self.is_mouseover_table(x, y):
+            max_offset = max(0, len(self.rows) - self.visible_count)
+            self.scroll_offset = min(max(0, self.scroll_offset - int(scroll_y)), max_offset)
+            self.update_row_positions()
+    
+    def is_mouseover_table(self, x, y):
+        is_within_horizontal_bounds = self.bounding_box.x < x < self.bounding_box_right_boundary
+        is_within_vertical_bounds = self.bounding_box.y < y < self.bounding_box_top_boundary
+
+        return is_within_horizontal_bounds and is_within_vertical_bounds
      
 class TextBox:
     def __init__(self, label, x, y, width, batch):
         self.document = pyglet.text.document.UnformattedDocument()
-        self.label = pyglet.text.Label(label, x=x - 10, y=y, anchor_x='right', anchor_y='bottom', batch=batch)
+        self.label = pyglet.text.Label(label, x - 10, y, anchor_x='right', anchor_y='bottom', batch=batch)
 
         font_size = self.document.get_font()
         height = font_size.ascent - font_size.descent
         self.layout = pyglet.text.layout.IncrementalTextLayout(self.document, x, y, 0, width, height, batch=batch)
         self.caret = pyglet.text.caret.Caret(self.layout)
-
         padding = 2
-        self.textbox_background = pyglet.shapes.Rectangle(x - padding, y - padding, width + padding, height + padding, color=(200, 200, 220), batch=batch)
         
-        self.current_value_label = pyglet.text.Label("", x=x + width + 10, y=y, anchor_x='left', anchor_y='bottom', 
-                                            color=(150, 150, 150, 255), batch=batch)
+        self.textbox_background = pyglet.shapes.Rectangle(x - padding, y - padding, width + padding, 
+                                                          height + padding, color=(200, 200, 220), batch=batch)
+        self.current_value_label = pyglet.text.Label("", x + width + 10, y, anchor_x='left', anchor_y='bottom', 
+                                                     color=(150, 150, 150, 255), batch=batch)
     
     def set_current_value(self, value):
         if value is not None:
