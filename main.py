@@ -215,7 +215,7 @@ class SimulationWindow(pyglet.window.Window):
                 self.simulation.gas_simulation.decompression_valve_open = True
 
             self.simulation.update_all(scaled_dt)
-            self.renderer.render(self.simulation.crank, self.simulation.connector_rod, self.simulation.piston)
+            self.renderer.render(self.simulation.crank, self.simulation.connecting_rod, self.simulation.piston)
             
             if self.simulation.crank.angular_velocity < 0:
                 print("Engine stalled")
@@ -230,7 +230,7 @@ class SimulationWindow(pyglet.window.Window):
         if self.simulation_paused is True:
             return
         current_time = (time.perf_counter() - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor
-        torque = round(self.simulation.crank.total_torque, 6)
+        torque = round(self.simulation.crank.current_torque, 6)
         rpm = round(self.simulation.crank.get_rpm(), 6)
         self.renderer.store_graph_point(current_time, torque, rpm)
 
@@ -274,7 +274,7 @@ class SimulationWindow(pyglet.window.Window):
                 return
 
         if parameters[2] <= parameters[0]:
-            print("Error: Connector Rod Length cannot be smaller than Crank Radius")
+            print("Error: Connecting Rod Length cannot be smaller than Crank Radius")
             return
 
         self.start_simulation(parameters, self.origin)
@@ -348,15 +348,16 @@ class SimulationWindow(pyglet.window.Window):
                 self.parameter_input_widgets[10].document.text = ""
 
     def load_config_button(self):
-        parameters = list(self.record_table.get_focused_data())
-        if parameters is not None:
+        data = self.record_table.get_focused_data()
+        if data is not None:
+            parameters = list(data)
             self.start_simulation(parameters[2:], self.origin)
 
     def delete_record_button(self):
-        conn = sqlite3.connect('database.db')
-        cursor = conn.cursor()
         focused_row = self.record_table.get_focused_data()
         if focused_row is not None:
+            conn = sqlite3.connect('database.db')
+            cursor = conn.cursor()
             focused_row_id = focused_row[0]
             if focused_row_id == self.last_save_id:
                 self.button_widgets[3].label.text = "Save Configuration"

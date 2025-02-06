@@ -30,18 +30,16 @@ class ListRow:
     def __init__(self, data, x, y, width, height, batch):
         self.data = data
         self.visible = True
-        self.label = pyglet.text.Label(str(self.data[1]), x, y, anchor_x='left', anchor_y='center', 
+        self.label = pyglet.text.Label(str(self.data[1]), x + 20, y, anchor_x='left', anchor_y='center', 
                                        color=(0, 0, 0, 255), batch=batch)
         self.bounding_box = pyglet.shapes.Rectangle(x, y, width, height, color=(200, 200, 220), batch=batch)
         self.focused = False
-        self.bounding_box_right_boundary = x + width
-        self.bounding_box_top_boundary = y + height
 
     def is_mouseover(self, x, y):
         if not self.visible: return False
         
-        is_within_horizontal_bounds = self.bounding_box.x < x < self.bounding_box_right_boundary
-        is_within_vertical_bounds = self.bounding_box.y < y < self.bounding_box_top_boundary
+        is_within_horizontal_bounds = self.bounding_box.x < x < self.bounding_box.x + self.bounding_box.width
+        is_within_vertical_bounds = self.bounding_box.y < y < self.bounding_box.y + self.bounding_box.height
 
         return is_within_horizontal_bounds and is_within_vertical_bounds
     
@@ -72,7 +70,6 @@ class ListTable:
         self.bounding_box = pyglet.shapes.Rectangle(x, y, width, height, color=(200, 200, 220), batch=batch)
         self.bounding_box_right_boundary = x + width
         self.bounding_box_top_boundary = y + height
-        self.row_x = x + 20
         self.row_height = 30
         self.scroll_offset = 0
         self.visible_count = height // self.row_height
@@ -88,7 +85,7 @@ class ListTable:
         
         for item in items:
             try:
-                row = ListRow(item, self.row_x, 0, self.bounding_box.width, self.row_height, self.batch)
+                row = ListRow(item, self.bounding_box.x, 0, self.bounding_box.width, self.row_height, self.batch)
                 self.rows.append(row)
             except:
                 print(f"Warning: Skipping invalid record format: {item}")

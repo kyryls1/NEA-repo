@@ -44,10 +44,10 @@ class Renderer:
         self.crankarm.rotation = angle_degrees
         self.axle.rotation = angle_degrees
 
-        self.rod.x = self.origin.x + rod.rod_start.x * self.scale_factor
-        self.rod.y = self.origin.y + rod.rod_start.y * self.scale_factor
-        self.rod.x2 = self.origin.x + rod.rod_end.x * self.scale_factor
-        self.rod.y2 = self.origin.y + rod.rod_end.y * self.scale_factor
+        self.rod.x = self.origin.x + rod.crank_anchor.x * self.scale_factor
+        self.rod.y = self.origin.y + rod.crank_anchor.y * self.scale_factor
+        self.rod.x2 = self.origin.x + rod.piston_anchor.x * self.scale_factor
+        self.rod.y2 = self.origin.y + rod.piston_anchor.y * self.scale_factor
 
         self.crank_bearing.x = self.rod.x
         self.crank_bearing.y = self.rod.y

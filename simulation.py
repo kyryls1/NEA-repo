@@ -13,12 +13,12 @@ class GasSimulation:
     AMBIENT_TEMPERATURE = 623
     TEMPERATURE_DIFFERENCE = 1750
 
-    def __init__(self, crank_radius, connector_rod_length, deck_clearance):
+    def __init__(self, crank_radius, connecting_rod_length, deck_clearance):
         self.moles_after_combustion = 0
         self.moles_before_combustion = 0
         self.moles_difference = 0
         self.increase_amplitude = 0
-        self.deck_surface_position = Vector(0, crank_radius + connector_rod_length + deck_clearance)
+        self.deck_surface_position = Vector(0, crank_radius + connecting_rod_length + deck_clearance)
         self.decompression_valve_open = True
 
     def update_fuel_flow_rate(self, mass_flow_rate):
@@ -68,11 +68,11 @@ class Simulation():
     PISTON_RING_GRADIENT_COEFFICIENT = -2.5
     PISTON_SKIRT_GRADIENT_COEFFICIENT = -2.1
 
-    def __init__(self, crank_radius, crank_mass, connector_rod_length, rod_mass, piston_radius, piston_mass, piston_length, deck_clearance): 
+    def __init__(self, crank_radius, crank_mass, connecting_rod_length, rod_mass, piston_radius, piston_mass, piston_length, deck_clearance): 
         self.crank = mechanical_components.Crank(crank_radius, crank_mass)
-        self.piston = mechanical_components.Piston(piston_mass,  piston_radius, piston_length, deck_clearance, crank_radius + connector_rod_length)
-        self.connector_rod = mechanical_components.ConnectorRod(rod_mass, connector_rod_length, crank_radius)
-        self.gas_simulation = GasSimulation(crank_radius, connector_rod_length, deck_clearance)
+        self.piston = mechanical_components.Piston(piston_mass,  piston_radius, piston_length, deck_clearance, crank_radius + connecting_rod_length)
+        self.connecting_rod = mechanical_components.ConnectingRod(rod_mass, connecting_rod_length, crank_radius)
+        self.gas_simulation = GasSimulation(crank_radius, connecting_rod_length, deck_clearance)
         self.piston_ring_area = 2 * (2*math.pi * self.piston.radius * 0.002)
         self.piston_skirt_area = self.piston.surface_area - self.piston_ring_area
         self.component_weight = (rod_mass + piston_mass) * 9.81
@@ -95,8 +95,8 @@ class Simulation():
         force_tangent_to_crank = self.transfer_force_to_crank(force_parallel_to_rod, rod_direction_vector)
 
         self.crank.update(force_tangent_to_crank, dt)
-        self.connector_rod.update(self.crank.calculate_delta_theta(dt))
-        self.piston.update(self.connector_rod.rod_end.y, dt)
+        self.connecting_rod.update(self.crank.calculate_delta_theta(dt))
+        self.piston.update(self.connecting_rod.piston_anchor.y, dt)
 
     def calculate_velocity_gradient(self, velocity, film_thickness, gradient_coefficient):
         return gradient_coefficient * velocity / film_thickness**2
@@ -122,7 +122,8 @@ class Simulation():
             return Vector(1, math.tan(theta))
    
     def find_rod_direction_vector(self):
-        return Vector(self.connector_rod.rod_end.x - self.connector_rod.rod_start.x, self.connector_rod.rod_end.y - self.connector_rod.rod_start.y)
+        return Vector(self.connecting_rod.piston_anchor.x - self.connecting_rod.crank_anchor.x,
+                      self.connecting_rod.piston_anchor.y - self.connecting_rod.crank_anchor.y)
     
     def transfer_force_to_rod(self, force, rod_direction_vector):
         piston_to_rod_angle = rod_direction_vector.angle_between(Vector(0, 1))
