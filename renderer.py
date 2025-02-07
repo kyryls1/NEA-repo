@@ -5,56 +5,58 @@ import matplotlib
 import matplotlib.pyplot as plt
 import multiprocessing
 
+matplotlib.use('TkAgg')
+SCALE_FACTOR = 2000 # 1mm = 2px
+
 class Renderer:
     def __init__(self, batch, origin, crank_radius_m, rod_length_m, piston_radius_m, piston_length_m):
         self.batch = batch
         self.origin = origin
-        self.scale_factor = 2000  # 1mm = 2px
         self.open_design_plots = {}
         
-        scaled_crank_px = crank_radius_m * self.scale_factor
-        scaled_rod_px = rod_length_m * self.scale_factor
-        scaled_piston_radius_px = piston_radius_m * self.scale_factor
-        scaled_piston_length_px = piston_length_m * self.scale_factor
+        scaled_crank_px = crank_radius_m * SCALE_FACTOR
+        scaled_rod_px = rod_length_m * SCALE_FACTOR
+        scaled_piston_radius_px = piston_radius_m * SCALE_FACTOR
+        scaled_piston_length_px = piston_length_m * SCALE_FACTOR
         
-        self.rod = pyglet.shapes.Line(x=origin.x, y=origin.y + scaled_crank_px, x2=origin.x, 
-                                      y2=origin.y + scaled_crank_px + scaled_rod_px, thickness=15, color=[201, 201, 201], batch=batch)
+        self.rod = pyglet.shapes.Line(x=origin.x, y=origin.y + scaled_crank_px, 
+                                      x2=origin.x, y2=origin.y + scaled_crank_px + scaled_rod_px, 
+                                      thickness=15, color=(201, 201, 201), batch=batch)
         self.piston_bearing = pyglet.shapes.Circle(x=origin.x, y=origin.y + scaled_crank_px + scaled_rod_px, 
-                                                   radius=15, color=[201, 201, 201], batch=batch)
+                                                   radius=15, color=(201, 201, 201), batch=batch)
         self.piston = pyglet.shapes.Rectangle(x=origin.x - scaled_piston_radius_px, 
                                               y=origin.y + scaled_crank_px + scaled_rod_px, 
                                               width=scaled_piston_radius_px * 2, 
                                               height=scaled_piston_length_px, 
-                                              color=[255, 255, 255], 
-                                              batch=batch)
+                                              color=(255, 255, 255), batch=batch)
         self.crank_bearing = pyglet.shapes.Circle(x=origin.x, y=origin.y + scaled_crank_px, 
-                                                  radius=20, color=[255, 255, 255], batch=batch)
-        self.crankarm = pyglet.shapes.Line(x=origin.x, y=origin.y, x2=origin.x, y2=origin.y + scaled_crank_px, 
-                                           thickness=40, color=[255, 255, 255], batch=batch)
-        self.axle = pyglet.shapes.Circle(x=origin.x, y=origin.y, radius=20, color=[201, 201, 201], batch=batch)
+                                                  radius=20, color=(255, 255, 255), batch=batch)
+        self.crankarm = pyglet.shapes.Line(x=origin.x, y=origin.y, 
+                                           x2=origin.x, y2=origin.y + scaled_crank_px, 
+                                           thickness=40, color=(255, 255, 255), batch=batch)
+        self.axle = pyglet.shapes.Circle(x=origin.x, y=origin.y, radius=20, color=(201, 201, 201), batch=batch)
         
         self.graph_points = LinkedList()
         self.paused_points = LinkedList()
         self.throttle_change_points = LinkedList()
         self.engine_load_change_points = LinkedList()
-        matplotlib.use('TkAgg')
                                                   
     def render(self, crank, rod, piston):
         angle_degrees = math.degrees(crank.angle_radians)
         self.crankarm.rotation = angle_degrees
         self.axle.rotation = angle_degrees
 
-        self.rod.x = self.origin.x + rod.crank_anchor.x * self.scale_factor
-        self.rod.y = self.origin.y + rod.crank_anchor.y * self.scale_factor
-        self.rod.x2 = self.origin.x + rod.piston_anchor.x * self.scale_factor
-        self.rod.y2 = self.origin.y + rod.piston_anchor.y * self.scale_factor
+        self.rod.x = self.origin.x + rod.crank_anchor.x * SCALE_FACTOR
+        self.rod.y = self.origin.y + rod.crank_anchor.y * SCALE_FACTOR
+        self.rod.x2 = self.origin.x + rod.piston_anchor.x * SCALE_FACTOR
+        self.rod.y2 = self.origin.y + rod.piston_anchor.y * SCALE_FACTOR
 
         self.crank_bearing.x = self.rod.x
         self.crank_bearing.y = self.rod.y
         self.piston_bearing.x = self.rod.x2
         self.piston_bearing.y = self.rod.y2
 
-        self.piston.y = self.origin.y + piston.position.y * self.scale_factor
+        self.piston.y = self.origin.y + piston.position.y * SCALE_FACTOR
 
     def store_graph_point(self, current_time, torque, angular_velocity):
         self.graph_points.append((current_time, torque, angular_velocity))
@@ -73,9 +75,12 @@ class Renderer:
         paused_points = list(self.paused_points)
         throttle_changes = list(self.throttle_change_points)
         engine_load_changes = list(self.engine_load_change_points)
-        self.plot_performance(time_points, torque_points, rpm_points, paused_points, throttle_changes, engine_load_changes, parameters)
+        self.plot_performance(time_points, torque_points, rpm_points, paused_points, throttle_changes, 
+                              engine_load_changes, parameters)
 
-    def plot_performance(self, time_points, torque_points, rpm_points, paused_points, throttle_changes, engine_load_changes, simulation_parameters, engine_design_id=0):
+    def plot_performance(self, time_points, torque_points, rpm_points, paused_points, throttle_changes, 
+            engine_load_changes, simulation_parameters, engine_design_id=0
+            ):
         if engine_design_id in self.open_design_plots:
             if self.open_design_plots[engine_design_id].is_alive():
                 print(f"Warning: Plot for engine design is already open")
@@ -92,24 +97,17 @@ class Renderer:
 
     @staticmethod
     def run_plot(times, torques, rpms, paused_points, throttle_changes, engine_load_changes, parameters):
-        # Initial error handling to catch easily identifiable issues
         try:
+            # Initial error handling to catch easily identifiable issues
+            if not times or not torques or not rpms:
+                raise ValueError("No data to plot")
+            
             if not (len(times) == len(torques) == len(rpms)):
                 raise ValueError("Mismatched lengths in plot data arrays")
 
             if not isinstance(parameters, (list, tuple)) or len(parameters) < 9:
                 raise ValueError("Invalid parameters format")
-
-        except Exception as e:
-            print(f"Error plotting graph: {str(e)}")
-            if 'process' in locals():
-                process.terminate()
-                process.join()
-
-            return
-
-        # Additional error handling to catch errors within data arrays
-        try:
+            
             fig, (config_parameters, torque_axis, rpm_axis) = plt.subplots(3, 1, figsize=(10, 8), gridspec_kw={'height_ratios': [0.15, 1, 1]})
             
             fig.canvas.manager.window.resizable(False, False)
@@ -142,18 +140,9 @@ class Renderer:
             rpm_axis.set_title('Engine Speed')
             rpm_axis.grid(True, alpha=0.3)
             
-            lines1, lines2 = [], []
-            labels1, labels2 = [], []
-            
             for time_point in paused_points:
-
-                line1 = torque_axis.axvline(x=time_point, color='r', linestyle='--', alpha=0.5)
-                line2 = rpm_axis.axvline(x=time_point, color='r', linestyle='--', alpha=0.5)
-                if not lines1:
-                    lines1.append(line1)
-                    lines2.append(line2)
-                    labels1.append('Simulation Paused')
-                    labels2.append('Simulation Paused')
+                torque_axis.axvline(x=time_point, color='r', linestyle='--', alpha=0.5)
+                rpm_axis.axvline(x=time_point, color='r', linestyle='--', alpha=0.5)
                 
             for time_point, fuel_mass in throttle_changes:
                 torque_axis.axvline(x=time_point, color='g', linestyle='-.', alpha=0.5)
@@ -209,16 +198,11 @@ class Renderer:
 
             plt.tight_layout()
             plt.show()
-            plt.close(fig)
         except Exception as e:
             print(f"Error plotting graph: {str(e)}")
+        finally:
             if 'fig' in locals():
                 plt.close(fig)
-            if 'process' in locals():
-                process.terminate()
-                process.join()
-                
-            return
 
     def close_plot(self, engine_design_id):
         if engine_design_id in self.open_design_plots:

@@ -264,7 +264,9 @@ class SimulationWindow(pyglet.window.Window):
     def start_simulation_button(self):
         inputs = [widget.document.text for widget in self.parameter_input_widgets[2:10]]
         if "" in inputs:
+            print("Error: All parameter fields must be filled in")
             return
+        
         parameters = list(map(float, inputs))
         param_names = ['crank_radius', 'crank_mass', 'rod_length', 'rod_mass',
                        'piston_radius', 'piston_length', 'piston_mass', 'deck_clearance']
@@ -283,12 +285,14 @@ class SimulationWindow(pyglet.window.Window):
         if hasattr(self, 'simulation'):
             self.simulation_paused = not self.simulation_paused
             if self.simulation_paused:
+                print("Simulation paused")
                 self.time_paused = time.perf_counter()
                 current_time = (self.time_paused - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor
                 self.renderer.store_paused_point(current_time)
                 named_parameters = ["Active Configuration"] + self.renderer_parameters
                 self.renderer.plot_active_configuration(named_parameters)
             else:
+                print("Simulation resumed")
                 time_resumed = time.perf_counter()
                 self.elapsed_pause_time += time_resumed - self.time_paused
                 self.renderer.close_plot(0)
@@ -296,6 +300,7 @@ class SimulationWindow(pyglet.window.Window):
     def ignition_starter_button(self):
         if hasattr(self, 'simulation') and self.simulation_paused is False:
             if self.engine_stalled:
+                print("Starter motor activated")
                 self.engine_stalled = False
                 self.simulation.toggle_starter_motor()
                 pyglet.clock.schedule_once(self.starter_cutout, 3)
@@ -324,28 +329,29 @@ class SimulationWindow(pyglet.window.Window):
     def save_config_button(self):
         if hasattr(self, 'renderer_parameters'):
             configuration_name = self.parameter_input_widgets[10].document.text
-            if configuration_name:
-                conn = sqlite3.connect('database.db')
-                cursor = conn.cursor()
-
-                if self.button_widgets[3].label.text == "Overwrite Last Save":
-                    self.delete_record(cursor, self.last_save_id)
+            if configuration_name != "":
+                try:
+                    conn = sqlite3.connect('database.db')
+                    cursor = conn.cursor()
+                    if self.button_widgets[3].label.text == "Overwrite Last Save":
+                        self.delete_record(cursor, self.last_save_id)
+    
+                    self.save_configuration(cursor, configuration_name, *self.renderer_parameters)
+                    self.last_save_id = cursor.lastrowid
+                    self.save_engine_performance_data(cursor, self.last_save_id)
+                    self.save_paused_points(cursor, self.last_save_id)
+                    self.save_throttle_change_points(cursor, self.last_save_id)
+                    self.save_engine_load_change_points(cursor, self.last_save_id)
                     conn.commit()
-                    self.record_table.insert_rows(self.get_engine_design_entries())
-                else:
+
                     self.button_widgets[3].label.text = "Overwrite Last Save"
-
-                self.save_configuration(cursor, configuration_name, *self.renderer_parameters)
-                self.last_save_id = cursor.lastrowid
-                self.save_engine_performance_data(cursor, self.last_save_id)
-                self.save_paused_points(cursor, self.last_save_id)
-                self.save_throttle_change_points(cursor, self.last_save_id)
-                self.save_engine_load_change_points(cursor, self.last_save_id)
-                conn.commit()
-                conn.close()
-
-                self.record_table.insert_rows(self.get_engine_design_entries())
-                self.parameter_input_widgets[10].document.text = ""
+                    self.record_table.insert_rows(self.get_engine_design_entries())
+                    self.parameter_input_widgets[10].document.text = ""
+                except Exception as e:
+                    conn.rollback()
+                    print(f"Database error saving configuration: {str(e)}")
+                finally:
+                    conn.close()
 
     def load_config_button(self):
         data = self.record_table.get_focused_data()
@@ -356,18 +362,31 @@ class SimulationWindow(pyglet.window.Window):
     def delete_record_button(self):
         focused_row = self.record_table.get_focused_data()
         if focused_row is not None:
-            conn = sqlite3.connect('database.db')
-            cursor = conn.cursor()
-            focused_row_id = focused_row[0]
-            if focused_row_id == self.last_save_id:
-                self.button_widgets[3].label.text = "Save Configuration"
-            self.renderer.close_plot(focused_row_id)
-            self.delete_record(cursor, focused_row_id)
-            conn.commit()
-            conn.close()
-            self.record_table.insert_rows(self.get_engine_design_entries())
+            try:
+                conn = sqlite3.connect('database.db')
+                cursor = conn.cursor()
+                focused_row_id = focused_row[0]
+                if focused_row_id == self.last_save_id:
+                    self.button_widgets[3].label.text = "Save Configuration"
+                self.renderer.close_plot(focused_row_id)
+                self.delete_record(cursor, focused_row_id)
+                conn.commit()
+
+                self.record_table.insert_rows(self.get_engine_design_entries())
+            except Exception as e:
+                conn.rollback()
+                print(f"Database error deleting record: {str(e)}")
+            finally:
+                conn.close()
 
     # Database Functions
+    def delete_record(self, cursor, save_id):
+        cursor.execute('DELETE FROM engine_designs WHERE id = ?', (save_id,))
+        cursor.execute('DELETE FROM engine_performance_data WHERE engine_design_id = ?', (save_id,))
+        cursor.execute('DELETE FROM paused_points WHERE engine_design_id = ?', (save_id,))
+        cursor.execute('DELETE FROM throttle_change_points WHERE engine_design_id = ?', (save_id,))
+        cursor.execute('DELETE FROM engine_load_change_points WHERE engine_design_id = ?', (save_id,))
+
     def save_configuration(self, cursor, configuration_name, *parameters):
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS engine_designs (
@@ -456,13 +475,6 @@ class SimulationWindow(pyglet.window.Window):
                 VALUES (?, ?, ?)
             ''', (engine_design_id, time_point, engine_load))
 
-    def delete_record(self, cursor, save_id):
-        cursor.execute('DELETE FROM engine_designs WHERE id = ?', (save_id,))
-        cursor.execute('DELETE FROM engine_performance_data WHERE engine_design_id = ?', (save_id,))
-        cursor.execute('DELETE FROM paused_points WHERE engine_design_id = ?', (save_id,))
-        cursor.execute('DELETE FROM throttle_change_points WHERE engine_design_id = ?', (save_id,))
-        cursor.execute('DELETE FROM engine_load_change_points WHERE engine_design_id = ?', (save_id,))
-
     def get_engine_design_entries(self):
         conn = sqlite3.connect('database.db')
         cursor = conn.cursor()
@@ -482,7 +494,33 @@ class SimulationWindow(pyglet.window.Window):
         finally:
             conn.close()
             return entries
-
+        
+    def load_plot(self, selected_record):
+        engine_design_id = selected_record[0]
+        try:
+            conn = sqlite3.connect('database.db')
+            cursor = conn.cursor()
+            data_points, paused_points, throttle_changes, load_changes = self.load_engine_performance_data(cursor, engine_design_id)
+            if data_points:
+                time_points, torque_points, rpm_points = zip(*data_points)
+            else:
+                time_points, torque_points, rpm_points = [], [], []
+            conn.close()
+        except Exception as e:
+            print(f"Database error in loading plot: {str(e)}")
+            time_points, torque_points, rpm_points = [], [], []
+            paused_points = []
+            throttle_changes = []
+            load_changes = []
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+        self.renderer.close_plot(engine_design_id)
+        self.renderer.plot_performance(time_points, torque_points, rpm_points, paused_points,
+                                       throttle_changes, load_changes, selected_record[1:], engine_design_id)
+        
     def load_engine_performance_data(self, cursor, engine_design_id):
         cursor.execute('''
             SELECT time, torque, rpm FROM engine_performance_data
@@ -490,56 +528,35 @@ class SimulationWindow(pyglet.window.Window):
             ORDER BY time ASC
         ''', (engine_design_id,))
         data_points = cursor.fetchall()
-        return data_points
-
-    def load_paused_points(self, cursor, engine_design_id):
+        
         cursor.execute('''
-            SELECT paused_time FROM paused_points
+            SELECT 'pause_point' as type, paused_time as time, NULL as value
+            FROM paused_points 
             WHERE engine_design_id = ?
-        ''', (engine_design_id,))
-        paused_points = cursor.fetchall()
-        return [point[0] for point in paused_points]
-
-    def load_throttle_change_points(self, cursor, engine_design_id):
-        cursor.execute('''
-            SELECT time, fuel_flow_rate FROM throttle_change_points
+            UNION ALL
+            SELECT 'throttle_change_point', time, fuel_flow_rate
+            FROM throttle_change_points
             WHERE engine_design_id = ?
-        ''', (engine_design_id,))
-        points = cursor.fetchall()
-        return points
-
-    def load_engine_load_change_points(self, cursor, engine_design_id):
-        cursor.execute('''
-            SELECT time, engine_load FROM engine_load_change_points
+            UNION ALL
+            SELECT 'load_change_point', time, engine_load
+            FROM engine_load_change_points
             WHERE engine_design_id = ?
-        ''', (engine_design_id,))
-        points = cursor.fetchall()
-        return points
+        ''', (engine_design_id, engine_design_id, engine_design_id))
+        event_points = cursor.fetchall()
+        
+        paused_points = []
+        throttle_change_points = []
+        load_change_points = []
 
-    def load_plot(self, selected_record):
-        engine_design_id = selected_record[0]
-        conn = sqlite3.connect('database.db')
-        cursor = conn.cursor()
-        try:
-            data_points = self.load_engine_performance_data(cursor, engine_design_id)
-            paused_points = self.load_paused_points(cursor, engine_design_id)
-            throttle_changes = self.load_throttle_change_points(cursor, engine_design_id)
-            load_changes = self.load_engine_load_change_points(cursor, engine_design_id)
-            time_points, torque_points, rpm_points = zip(*data_points)
-        except sqlite3.OperationalError as e:
-            print(f"Database error: {e}")
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-        finally:
-            if 'data_points' not in locals():
-                paused_points = []
-                throttle_changes = []
-                load_changes = []
-                time_points, torque_points, rpm_points = [], [], []
-
-            self.renderer.close_plot(engine_design_id)
-            self.renderer.plot_performance(time_points, torque_points, rpm_points, paused_points,
-                                           throttle_changes, load_changes, selected_record[1:], engine_design_id)
+        for type, time, value in event_points:
+            if type == 'pause_point':
+                paused_points.append(time)
+            elif type == 'throttle_change_point':
+                throttle_change_points.append((time, value))
+            else:
+                load_change_points.append((time, value))
+                
+        return data_points, paused_points, throttle_change_points, load_change_points
 
     # Utility Functions
     def mm_to_m(self, value):
