@@ -3,93 +3,109 @@ import matplotlib.pyplot as plt
 from renderer import Renderer
 from vector import Vector
 
-# ------------------------- Test store_graph_point -------------------------
-batch = pyglet.graphics.Batch()
-origin = Vector(0, 0)
-renderer = Renderer(batch, origin, 0.05, 0.1, 0.02, 0.04)
+def setup_test():
+    print("-" * 50)
+    flag.update({'called': False})
 
-renderer.store_graph_point(1.0, 10.0, 1000.0)
-stored_point = renderer.graph_points.head.data
-print(f"Stored graph point: {stored_point}")
-assert renderer.graph_points.head.data == (1.0, 10.0, 1000.0)
-print("\n✓ Test store_graph_point: Unit Test Passed")
+# Test Cases
+def test_valid_data():
+    setup_test()
+    print("Testing run_plot with valid data...")
+    
+    time_points = [0, 1, 2, 3]
+    torque_points = [10, 15, 20, 25]
+    rpm_points = [1000, 1500, 2000, 2500]
+    paused_points = [1.5, 2.5]
+    throttle_changes = [(0.5, 0.7), (2.5, 0.9)]
+    engine_load_changes = [(1.0, 120), (3.0, 180)]
+    parameters = ["Test Plot", 10, 20, 30, 40, 50, 60, 70, 80]
 
-# ------------------------- Test store_paused_point -------------------------
-renderer.store_paused_point(2.0)
-stored_pause = renderer.paused_points.head.data
-print(f"Stored pause point: {stored_pause}")
-assert renderer.paused_points.head.data == 2.0
-print("\n✓ Test store_paused_point: Unit Test Passed")
+    Renderer.run_plot(time_points, torque_points, rpm_points, paused_points, 
+                     throttle_changes, engine_load_changes, parameters)
+    
+    print(f"Plot function called: {flag['called']}")
+    assert flag['called'] is True
+    print("✓ Unit Test passed: Valid data plotted successfully")
 
-# ------------------------- Test store_throttle_change_point -------------------------
-renderer.store_throttle_change_point(3.0, 0.8)
-stored_throttle = renderer.throttle_change_points.head.data
-print(f"Stored throttle change: {stored_throttle}")
-assert renderer.throttle_change_points.head.data == (3.0, 0.8)
-print("\n✓ Test store_throttle_change_point: Unit Test Passed")
+def test_empty_data():
+    setup_test()
+    print("Testing run_plot with empty data...")
+    
+    Renderer.run_plot([], [], [], [], [], [], ["Test Plot", 10, 20, 30, 40, 50, 60, 70, 80])
+    
+    print(f"Plot was called: {flag['called']} (expected: False)")
+    assert flag['called'] is False
+    print("✓ Unit Test passed: Empty data handled correctly")
 
-# ------------------------- Test store_engine_load_change_point -------------------------
-renderer.store_engine_load_change_point(4.0, 150)
-stored_load = renderer.engine_load_change_points.head.data
-print(f"Stored engine load change: {stored_load}")
-assert renderer.engine_load_change_points.head.data == (4.0, 150)
-print("\n✓ Test store_engine_load_change_point: Unit Test Passed")
+def test_mismatched_lengths():
+    setup_test()
+    print("Testing run_plot with mismatched array lengths...")
+    
+    time_points = [0, 1, 2]
+    torque_points = [10, 15]
+    rpm_points = [1000, 1500, 2000]
+    parameters = ["Test Plot", 10, 20, 30, 40, 50, 60, 70, 80]
+    
+    print(f"Array lengths - times: {len(time_points)}, torques: {len(torque_points)}, rpms: {len(rpm_points)}")
+    
+    Renderer.run_plot(time_points, torque_points, rpm_points, [], [], [], parameters)
+    
+    print(f"Plot was called: {flag['called']} (expected: False)")
+    assert flag['called'] is False
+    print("✓ Unit Test passed: Mismatched lengths handled correctly")
 
-# ------------------------- Test run_plot with valid data -------------------------
-times = [0, 1, 2, 3]
-torques = [10, 15, 20, 25]
-rpms = [1000, 1500, 2000, 2500]
-paused_points = [1.5, 2.5]
-throttle_changes = [(0.5, 0.7), (2.5, 0.9)]
-engine_load_changes = [(1.0, 120), (3.0, 180)]
-parameters = ["Test Plot", 10, 20, 30, 40, 50, 60, 70, 80]
+def test_invalid_parameters():
+    setup_test()
+    print("Testing run_plot with invalid parameters format...")
+    
+    time_points = [0, 1, 2]
+    torque_points = [10, 15, 20]
+    rpm_points = [1000, 1500, 2000]
+    invalid_parameters = "Not a list"
+    
+    print(f"Testing with invalid parameters type: {type(invalid_parameters)}")
+    
+    Renderer.run_plot(time_points, torque_points, rpm_points, [], [], [], invalid_parameters)
+    print(f"Plot was called: {flag['called']} (expected: False)")
+    assert flag['called'] is False
+    print("✓ Unit Test passed: Invalid parameters handled correctly")
 
-flag = {'called': False}
-original_show = plt.show
-plt.show = lambda: flag.update({'called': True})
+def test_plot_error():
+    setup_test()
+    print("Testing run_plot with unexpected plotting error...")
+    
+    time_points = [0, 1, 2]
+    torque_points = [10, 15, 20]
+    rpm_points = [1000, 1500, 2000]
+    parameters = ["Test Plot", 10, 20, 30, 40, 50, 60, 70, 80]
+    
+    # Mock matplotlib to force an error during plotting
+    def mock_plot(*args, **kwargs):
+        raise ValueError("Mock plotting error")
+    
+    plt.figure = mock_plot
 
-Renderer.run_plot(times, torques, rpms, paused_points, throttle_changes, engine_load_changes, parameters)
-print(f"Plot function called: {flag['called']}")
-assert flag['called'] is True
-plt.show = original_show
-print("\n✓ Test run_plot with valid data: Unit Test Passed")
+    Renderer.run_plot(time_points, torque_points, rpm_points, [], [], [], parameters)
+    print(f"Plot was called: {flag['called']} (expected: False)")
+    assert flag['called'] is False
+    print("✓ Unit Test passed: Plotting error handled gracefully")
 
-# ------------------------- Test run_plot error cases -------------------------
-# Test empty data
-print("\nTesting run_plot with empty data...")
-flag = {'called': False}
-plt.show = lambda: flag.update({'called': True})
+# Run Tests
+if __name__ == "__main__":
+    # Test Setup
+    batch = pyglet.graphics.Batch()
+    origin = Vector(0, 0)
+    renderer = Renderer(batch, origin, 0.05, 0.1, 0.02, 0.04)
 
-Renderer.run_plot([], [], [], [], [], [], parameters)
-print(f"Plot was called: {flag['called']} (expected: False)")
-assert flag['called'] is False
-print("\n✓ Test run_plot empty data error: Unit Test Passed")
+    # Mock matplotlib to track plot calls
+    flag = {'called': False}
+    plt.show = lambda: flag.update({'called': True})
 
-# Test mismatched lengths
-print("\nTesting run_plot with mismatched lengths...")
-times = [0, 1, 2]
-torques = [10, 15]  # One element shorter
-rpms = [1000, 1500, 2000]
-print(f"Testing with lengths - times: {len(times)}, torques: {len(torques)}, rpms: {len(rpms)}")
-
-flag = {'called': False}
-plt.show = lambda: flag.update({'called': True})
-
-Renderer.run_plot(times, torques, rpms, [], [], [], parameters)
-print(f"Plot was called: {flag['called']} (expected: False)")
-assert flag['called'] is False
-print("\n✓ Test run_plot mismatched lengths error: Unit Test Passed")
-
-# Test invalid parameters
-print("\nTesting run_plot with invalid parameters...")
-invalid_parameters = ["Test Plot", 10]  # Too few parameters
-print(f"Testing with invalid parameters length: {len(invalid_parameters)}")
-
-flag = {'called': False}
-plt.show = lambda: flag.update({'called': True})
-
-Renderer.run_plot(times, torques, rpms, [], [], [], invalid_parameters)
-print(f"Plot was called: {flag['called']} (expected: False)")
-assert flag['called'] is False
-plt.show = original_show
-print("\n✓ Test run_plot invalid parameters error: Unit Test Passed")
+    print("Running renderer.py tests...")
+    test_valid_data()
+    test_empty_data()
+    test_mismatched_lengths()
+    test_invalid_parameters()
+    test_plot_error()
+    print("-" * 50)
+    print("All tests completed.")

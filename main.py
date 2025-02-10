@@ -209,10 +209,11 @@ class SimulationWindow(pyglet.window.Window):
         if not self.simulation_paused and not self.engine_stalled:
             scaled_dt = dt * self.simulation_speed_factor
 
-            if self.simulation.crank.get_rpm() > self.simulation.gas_simulation.STARTING_RPM:
-                self.simulation.gas_simulation.decompression_valve_open = False
-            else:
-                self.simulation.gas_simulation.decompression_valve_open = True
+            if self.simulation.crank.starter_motor_on or self.simulation.gas_simulation.decompression_valve_open:
+                if self.simulation.crank.get_rpm() > self.simulation.gas_simulation.STARTING_RPM:
+                    self.simulation.gas_simulation.decompression_valve_open = False
+                else:
+                    self.simulation.gas_simulation.decompression_valve_open = True
 
             self.simulation.update_all(scaled_dt)
             self.renderer.render(self.simulation.crank, self.simulation.connecting_rod, self.simulation.piston)
@@ -375,7 +376,7 @@ class SimulationWindow(pyglet.window.Window):
                 self.record_table.insert_rows(self.get_engine_design_entries())
             except Exception as e:
                 conn.rollback()
-                print(f"Database error deleting record: {str(e)}")
+                print(f"Error deleting record: {str(e)}")
             finally:
                 conn.close()
 

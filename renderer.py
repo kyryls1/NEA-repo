@@ -96,13 +96,13 @@ class Renderer:
         plot_process_comparison.start()
 
     @staticmethod
-    def run_plot(times, torques, rpms, paused_points, throttle_changes, engine_load_changes, parameters):
+    def run_plot(time_points, torque_points, rpm_points, paused_points, throttle_changes, engine_load_changes, parameters):
         try:
             # Initial error handling to catch easily identifiable issues
-            if not times or not torques or not rpms:
+            if not time_points or not torque_points or not rpm_points:
                 raise ValueError("No data to plot")
             
-            if not (len(times) == len(torques) == len(rpms)):
+            if not (len(time_points) == len(torque_points) == len(rpm_points)):
                 raise ValueError("Mismatched lengths in plot data arrays")
 
             if not isinstance(parameters, (list, tuple)) or len(parameters) < 9:
@@ -129,12 +129,12 @@ class Renderer:
                 bbox=dict(facecolor='white', alpha=0.7, boxstyle='round,pad=0.5')
             )
             
-            torque_axis.plot(times, torques, color='lightblue', linewidth=1, label='Torque')
+            torque_axis.plot(time_points, torque_points, color='lightblue', linewidth=1, label='Torque')
             torque_axis.set_ylabel('Torque (N·m)')
             torque_axis.set_title('Engine Torque')
             torque_axis.grid(True, alpha=0.3)
             
-            rpm_axis.plot(times, rpms, color='orange', linewidth=1, label='RPM')
+            rpm_axis.plot(time_points, rpm_points, color='orange', linewidth=1, label='RPM')
             rpm_axis.set_xlabel('Time (s)')
             rpm_axis.set_ylabel('Engine Speed (RPM)')
             rpm_axis.set_title('Engine Speed')
