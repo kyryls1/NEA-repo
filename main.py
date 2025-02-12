@@ -80,7 +80,7 @@ class SimulationWindow(pyglet.window.Window):
             widgets.Button("Pause/Unpause", buttons_x, buttons_y, button_width, button_height,
                            self.toggle_simulation_pause_button, self.static_batch),
             widgets.Button("Set Parameters", buttons_x + button_width + button_spacing, buttons_y,
-                           button_width, button_height, self.start_simulation_button, self.static_batch),
+                           button_width, button_height, self.set_parameters_button, self.static_batch),
             widgets.Button("Starter", buttons_x + 2 * (button_width + button_spacing), buttons_y,
                            button_width, button_height, self.ignition_starter_button, self.static_batch),
             widgets.Button("Save Configuration", buttons_x, buttons_y - button_height - button_spacing,
@@ -262,7 +262,7 @@ class SimulationWindow(pyglet.window.Window):
         self.engine_stalled = True
 
     # Buttons and User Input Handling
-    def start_simulation_button(self):
+    def set_parameters_button(self):
         inputs = [widget.document.text for widget in self.parameter_input_widgets[2:10]]
         if "" in inputs:
             print("Error: All parameter fields must be filled in")
@@ -291,7 +291,7 @@ class SimulationWindow(pyglet.window.Window):
                 current_time = (self.time_paused - self.start_time - self.elapsed_pause_time) * self.simulation_speed_factor
                 self.renderer.store_paused_point(current_time)
                 named_parameters = ["Active Configuration"] + self.renderer_parameters
-                self.renderer.plot_active_configuration(named_parameters)
+                self.renderer.plot_active_configuration_performance(named_parameters)
             else:
                 print("Simulation resumed")
                 time_resumed = time.perf_counter()
@@ -518,8 +518,7 @@ class SimulationWindow(pyglet.window.Window):
                 conn.close()
             except:
                 pass
-        self.renderer.close_plot(engine_design_id)
-        self.renderer.plot_performance(time_points, torque_points, rpm_points, paused_points,
+        self.renderer.plot_engine_performance_graph(time_points, torque_points, rpm_points, paused_points,
                                        throttle_changes, load_changes, selected_record[1:], engine_design_id)
         
     def load_engine_performance_data(self, cursor, engine_design_id):

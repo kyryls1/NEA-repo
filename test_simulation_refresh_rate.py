@@ -38,6 +38,5 @@ def test_simulation_refresh_rate():
     elapsed_time = time.perf_counter() - window.start_time
     achieved_fps = window.updates_count / elapsed_time if elapsed_time > 0 else 0
 
-    # Require at least 90% of target framerate
-    assert achieved_fps >= target_fps * 0.9, f"Achieved {achieved_fps:.2f} FPS, below 90% of {target_fps}"
-    print(f"Achieved FPS: {achieved_fps:.2f}")
+    # Require at least 95% of target framerate
+    assert achieved_fps >= target_fps * 0.95, f"Achieved {achieved_fps:.2f} FPS, below 95% of {target_fps}"

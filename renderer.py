@@ -70,15 +70,15 @@ class Renderer:
     def store_engine_load_change_point(self, time, new_load):
         self.engine_load_change_points.append((time, new_load))
 
-    def plot_active_configuration(self, parameters):
+    def plot_active_configuration_performance(self, parameters):
         time_points, torque_points, rpm_points = zip(*self.graph_points)
         paused_points = list(self.paused_points)
         throttle_changes = list(self.throttle_change_points)
         engine_load_changes = list(self.engine_load_change_points)
-        self.plot_performance(time_points, torque_points, rpm_points, paused_points, throttle_changes, 
+        self.plot_engine_performance_graph(time_points, torque_points, rpm_points, paused_points, throttle_changes, 
                               engine_load_changes, parameters)
 
-    def plot_performance(self, time_points, torque_points, rpm_points, paused_points, throttle_changes, 
+    def plot_engine_performance_graph(self, time_points, torque_points, rpm_points, paused_points, throttle_changes, 
             engine_load_changes, simulation_parameters, engine_design_id=0
             ):
         if engine_design_id in self.open_design_plots:
