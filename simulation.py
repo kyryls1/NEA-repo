@@ -65,10 +65,10 @@ class GasSimulation:
 class Simulation():
     FILM_THICKNESS = 3e-6 
     DYNAMIC_VISCOSITY = 0.01
-    PISTON_RING_GRADIENT_COEFFICIENT = -2.5
-    PISTON_SKIRT_GRADIENT_COEFFICIENT = -2.1
+    PISTON_RING_GRADIENT_COEFFICIENT = -7.5
+    PISTON_SKIRT_GRADIENT_COEFFICIENT = -6.3
 
-    def __init__(self, crank_radius, crank_mass, connecting_rod_length, rod_mass, piston_radius, piston_mass, piston_length, deck_clearance): 
+    def __init__(self, crank_radius, crank_mass, connecting_rod_length, rod_mass, piston_radius, piston_length, piston_mass, deck_clearance): 
         self.crank = mechanical_components.Crank(crank_radius, crank_mass)
         self.piston = mechanical_components.Piston(piston_mass,  piston_radius, piston_length, deck_clearance, crank_radius + connecting_rod_length)
         self.connecting_rod = mechanical_components.ConnectingRod(rod_mass, connecting_rod_length, crank_radius)

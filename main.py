@@ -330,6 +330,7 @@ class SimulationWindow(pyglet.window.Window):
     def save_config_button(self):
         if hasattr(self, 'renderer_parameters'):
             configuration_name = self.parameter_input_widgets[10].document.text
+            conn = None
             if configuration_name != "":
                 try:
                     conn = sqlite3.connect('database.db')
@@ -345,14 +346,16 @@ class SimulationWindow(pyglet.window.Window):
                     self.save_engine_load_change_points(cursor, self.last_save_id)
                     conn.commit()
 
-                    self.button_widgets[3].label.text = "Overwrite Last Save"
                     self.record_table.insert_rows(self.get_engine_design_entries())
                     self.parameter_input_widgets[10].document.text = ""
-                except Exception as e:
-                    conn.rollback()
+                    self.button_widgets[3].label.text = "Overwrite Last Save"
+                except Exception as e:                    
                     print(f"Database error saving configuration: {str(e)}")
+                    if conn:
+                        conn.rollback()
                 finally:
-                    conn.close()
+                    if conn:
+                        conn.close()
 
     def load_config_button(self):
         data = self.record_table.get_focused_data()
@@ -362,6 +365,7 @@ class SimulationWindow(pyglet.window.Window):
 
     def delete_record_button(self):
         focused_row = self.record_table.get_focused_data()
+        conn = None
         if focused_row is not None:
             try:
                 conn = sqlite3.connect('database.db')
@@ -375,10 +379,12 @@ class SimulationWindow(pyglet.window.Window):
 
                 self.record_table.insert_rows(self.get_engine_design_entries())
             except Exception as e:
-                conn.rollback()
                 print(f"Error deleting record: {str(e)}")
+                if conn:
+                    conn.rollback()
             finally:
-                conn.close()
+                if conn:
+                    conn.close()
 
     # Database Functions
     def delete_record(self, cursor, save_id):
@@ -477,9 +483,10 @@ class SimulationWindow(pyglet.window.Window):
             ''', (engine_design_id, time_point, engine_load))
 
     def get_engine_design_entries(self):
-        conn = sqlite3.connect('database.db')
-        cursor = conn.cursor()
+        conn = None
         try:
+            conn = sqlite3.connect('database.db')
+            cursor = conn.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='engine_designs'")
             if cursor.fetchone() is not None:
                 cursor.execute('SELECT * FROM engine_designs')
@@ -493,11 +500,14 @@ class SimulationWindow(pyglet.window.Window):
             print(f"Unexpected error: {e}")
             entries = []
         finally:
-            conn.close()
+            if conn:
+                conn.close()
+
             return entries
         
     def load_plot(self, selected_record):
         engine_design_id = selected_record[0]
+        conn = None
         try:
             conn = sqlite3.connect('database.db')
             cursor = conn.cursor()
@@ -506,7 +516,6 @@ class SimulationWindow(pyglet.window.Window):
                 time_points, torque_points, rpm_points = zip(*data_points)
             else:
                 time_points, torque_points, rpm_points = [], [], []
-            conn.close()
         except Exception as e:
             print(f"Database error in loading plot: {str(e)}")
             time_points, torque_points, rpm_points = [], [], []
@@ -514,11 +523,10 @@ class SimulationWindow(pyglet.window.Window):
             throttle_changes = []
             load_changes = []
         finally:
-            try:
+            if conn:
                 conn.close()
-            except:
-                pass
-        self.renderer.plot_engine_performance_graph(time_points, torque_points, rpm_points, paused_points,
+
+            self.renderer.plot_engine_performance_graph(time_points, torque_points, rpm_points, paused_points,
                                        throttle_changes, load_changes, selected_record[1:], engine_design_id)
         
     def load_engine_performance_data(self, cursor, engine_design_id):
